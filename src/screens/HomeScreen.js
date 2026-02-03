@@ -6,14 +6,14 @@ import {
     TouchableOpacity,
     TextInput,
     Modal,
-    SafeAreaView,
     Platform,
     ScrollView,
     Alert,
     PermissionsAndroid,
     RefreshControl,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Icon from 'react-native-vector-icons/SimpleLineIcons';
+import Icons from 'react-native-vector-icons/MaterialCommunityIcons';
 import moment from 'moment';
 import Geolocation from 'react-native-geolocation-service';
 import AttendanceService from '../services/AttendanceService';
@@ -30,6 +30,7 @@ const HomeScreen = ({ route, navigation }) => {
 
     // UI State driven by Backend APIs
     const [showCheckInButton, setShowCheckInButton] = useState(true);
+    const [locationStatusMessage, setLocationStatusMessage] = useState(null);
     const [todayActivity, setTodayActivity] = useState([]);
 
     const [activeWorkMode, setActiveWorkMode] = useState(null);
@@ -60,29 +61,51 @@ const HomeScreen = ({ route, navigation }) => {
 
             const today = moment().format('YYYY-MM-DD');
 
-            const activityRes = await AttendanceService.getUserLoginData(userInfo?.userId, today);
-            const activities = activityRes.data || [];
-            setTodayActivity(activities);
+            // 1. Fetch Today's Activity (Independent Call)
+            try {
+                const activityRes = await AttendanceService.getUserLoginData(userInfo?.userId, today);
+                const activities = activityRes.data || [];
+                setTodayActivity(activities);
 
-            if (activities.length > 0) {
-                const latest = activities[activities.length - 1];
-                if (latest.currStatus) {
-                    setActiveWorkMode(latest.workMode);
+                if (activities.length > 0) {
+                    const latest = activities[activities.length - 1];
+                    if (latest.currStatus) {
+                        setActiveWorkMode(latest.workMode);
+                    } else {
+                        setActiveWorkMode(null);
+                    }
                 } else {
                     setActiveWorkMode(null);
                 }
-            } else {
-                setActiveWorkMode(null);
+            } catch (err) {
+                if (err.response?.status !== 404) {
+                    console.error('Fetch Activity Error:', err);
+                }
             }
 
-            const statusRes = await AttendanceService.checkEmployeeLastStatusOfToday(userInfo?.userId);
-            // false -> User is checked out, show "Check In" button (true)
-            // true -> User is checked in, show "Check Out" button (false)
-            setShowCheckInButton(statusRes.data === false);
+            // 2. Fetch Employee Last Status (Handles 404 gracefully)
+            try {
+                const statusRes = await AttendanceService.checkEmployeeLastStatusOfToday(userInfo?.userId);
+                setShowCheckInButton(statusRes.data === false);
+                setLocationStatusMessage(null);
+            } catch (error) {
+                if (error.response?.status === 404) {
+                    const msg = error.response.data?.message || "Work location not assigned for today. Please contact your resource manager.";
+                    setShowCheckInButton(false);
+                    setLocationStatusMessage(msg);
+
+                    // Brief delay to allow user to see the message in the LoadingOverlay
+                    if (!isRefreshing) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                } else {
+                    console.error('Status API Error:', error);
+                    Alert.alert('Error', 'Failed to fetch latest attendance status.');
+                }
+            }
 
         } catch (error) {
-            console.error('Fetch Initial Data Error:', error);
-            Alert.alert('Error', 'Failed to fetch latest attendance status.');
+            console.error('Fetch Initial Data General Error:', error);
         } finally {
             if (isRefreshing) setRefreshing(false);
             else setLoading(false);
@@ -119,7 +142,6 @@ const HomeScreen = ({ route, navigation }) => {
     };
 
     const handleAttendanceClick = () => {
-        // If showCheckInButton is false, it means user is checked in
         const isCurrentlyCheckedIn = !showCheckInButton;
         setSelectedWorkMode(isCurrentlyCheckedIn ? activeWorkMode : null);
         setShowLocationModal(true);
@@ -216,7 +238,7 @@ const HomeScreen = ({ route, navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
@@ -230,7 +252,7 @@ const HomeScreen = ({ route, navigation }) => {
                         <Text style={styles.userNameText}>{userName || 'User'}</Text>
                     </View>
                     <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                        <Icon name="power" size={24} color={COLORS.error} />
+                        <Icon name="logout" size={20} color={COLORS.secondary} />
                     </TouchableOpacity>
                 </View>
 
@@ -242,29 +264,35 @@ const HomeScreen = ({ route, navigation }) => {
                             <Text style={styles.dateText}>{currentTime.format('ddd, MMM DD, YYYY')}</Text>
                             <Text style={styles.shiftText}>Shift: General (10:00 AM - 7:00 PM)</Text>
                         </View>
-                        <Icon name="calendar-clock" size={40} color={COLORS.primary} />
+                        <Icons name="calendar-clock" size={35} color={COLORS.primary} />
                     </View>
 
-                    <View style={styles.cardBottom}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Remarks"
-                            placeholderTextColor="#999"
-                            value={remarks}
-                            onChangeText={setRemarks}
-                        />
-                        <TouchableOpacity
-                            style={[styles.button, showCheckInButton ? styles.checkInBtn : styles.checkOutBtn]}
-                            onPress={handleAttendanceClick}
-                            disabled={loading}
-                        >
-                            <Text style={styles.buttonText}>
-                                {showCheckInButton ? 'Check In' : 'Check Out'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    {locationStatusMessage ? (
+                        <View style={styles.infoBox}>
+                            <Icon name="information-outline" size={22} color={COLORS.primary} />
+                            <Text style={styles.infoText}>{locationStatusMessage}</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.cardBottom}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Remarks"
+                                placeholderTextColor="#999"
+                                value={remarks}
+                                onChangeText={setRemarks}
+                            />
+                            <TouchableOpacity
+                                style={[styles.button, showCheckInButton ? styles.checkInBtn : styles.checkOutBtn]}
+                                onPress={handleAttendanceClick}
+                                disabled={loading}
+                            >
+                                <Text style={styles.buttonText}>
+                                    {showCheckInButton ? 'Check In' : 'Check Out'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
-                <ScrollView></ScrollView>
                 {/* Today's Activity Card */}
                 <View style={[styles.card, styles.activityCard]}>
                     <Text style={styles.activityTitle}>Today's Activity</Text>
@@ -288,7 +316,7 @@ const HomeScreen = ({ route, navigation }) => {
                                         </Text>
                                     </View>
                                     <View style={styles.activityLocationRow}>
-                                        <Icon
+                                        <Icons
                                             name={item.workMode === 'Office' ? 'office-building' : item.workMode === 'Work from home' ? 'home' : 'account-group'}
                                             size={14}
                                             color="#666"
@@ -326,7 +354,7 @@ const HomeScreen = ({ route, navigation }) => {
                                     ]}
                                     onPress={() => setSelectedWorkMode(loc.label)}
                                 >
-                                    <Icon
+                                    <Icons
                                         name={loc.icon}
                                         size={24}
                                         color={selectedWorkMode === loc.label ? COLORS.primary : "#333"}
@@ -339,7 +367,7 @@ const HomeScreen = ({ route, navigation }) => {
                                         {loc.label}
                                     </Text>
                                     {selectedWorkMode === loc.label && (
-                                        <Icon name="check-circle" size={20} color={COLORS.primary} style={styles.checkIcon} />
+                                        <Icons name="check-circle" size={20} color={COLORS.primary} style={styles.checkIcon} />
                                     )}
                                 </TouchableOpacity>
                             ))}
@@ -358,8 +386,12 @@ const HomeScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
             </Modal>
 
-            <LoadingOverlay visible={loading} showCheckInButton={showCheckInButton} />
-        </SafeAreaView>
+            <LoadingOverlay
+                visible={loading}
+                message={locationStatusMessage}
+                showCheckInButton={showCheckInButton}
+            />
+        </View>
     );
 };
 
@@ -413,6 +445,23 @@ const styles = StyleSheet.create({
     confirmButton: { backgroundColor: COLORS.primary, paddingVertical: 16, borderRadius: 15, alignItems: 'center', ...SHADOW },
     disabledButton: { backgroundColor: '#ccc' },
     confirmButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    infoBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#e3f2fd',
+        padding: 15,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#bbdefb',
+    },
+    infoText: {
+        flex: 1,
+        color: '#1976d2',
+        fontSize: 14,
+        marginLeft: 10,
+        fontWeight: '500',
+        lineHeight: 20,
+    },
 });
 
 export default HomeScreen;
