@@ -7,7 +7,6 @@ import { AZURE_CONFIG, API_CONFIG } from '../constants/Config';
 class AuthService {
     async login() {
         try {
-            console.log('Starting Azure login...');
             const result = await authorize(AZURE_CONFIG);
 
             if (result && result.accessToken) {
@@ -22,8 +21,6 @@ class AuthService {
     }
 
     async exchangeToken(azureToken) {
-        console.log('Exchanging token with backend...', `${API_CONFIG.BASE_URL}/auth/mobile/token-exchange`);
-
         try {
             const response = await axios.post(`${API_CONFIG.BASE_URL}/auth/mobile/token-exchange`, {
                 azureToken: azureToken
@@ -42,7 +39,6 @@ class AuthService {
                     throw new Error('Secure storage not available');
                 }
 
-                console.log('Token exchange successful');
                 return response.data;
             }
             throw new Error('Invalid response from token exchange');
@@ -80,7 +76,6 @@ class AuthService {
                 await Keychain.resetGenericPassword({ service: 'ipro_backend_service' });
             }
             await AsyncStorage.removeItem('user_profile');
-            console.log('User signed out and data cleared');
         } catch (error) {
             console.error('Logout Error:', error);
         }

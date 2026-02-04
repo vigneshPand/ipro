@@ -209,8 +209,6 @@ const HomeScreen = ({ route, navigation }) => {
                         remarks: remarks || '',
                     };
 
-                    console.log('payload', payload);
-
                     try {
                         await AttendanceService.checkInOut(payload);
 
@@ -219,8 +217,20 @@ const HomeScreen = ({ route, navigation }) => {
 
                         await fetchInitialData();
                     } catch (error) {
-                        console.error('CheckInOut API Error:', error);
-                        Alert.alert('Error', 'Action failed. Please try again.');
+
+                        let errorMessage = 'Action failed. Please try again.';
+
+                        if (error.response?.data) {
+                            if (typeof error.response.data === 'string') {
+                                errorMessage = error.response.data;
+                            } else if (error.response.data.message) {
+                                errorMessage = error.response.data.message;
+                            } else if (error.response.data.error) {
+                                errorMessage = error.response.data.error;
+                            }
+                        }
+
+                        Alert.alert('Action Restricted', errorMessage);
                         setLoading(false);
                     }
                 },
@@ -317,7 +327,7 @@ const HomeScreen = ({ route, navigation }) => {
                                     </View>
                                     <View style={styles.activityLocationRow}>
                                         <Icons
-                                            name={item.workMode === 'Office' ? 'office-building' : item.workMode === 'Work from home' ? 'home' : 'account-group'}
+                                            name={item.workMode === 'Office' ? 'office-building' : item.workMode === 'Home' ? 'home' : 'account-group'}
                                             size={14}
                                             color="#666"
                                         />

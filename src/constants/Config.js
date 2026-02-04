@@ -11,7 +11,7 @@ export const API_CONFIG = {
 
 export const WORK_LOCATIONS = [
     { id: 'OFFICE', label: 'Office', icon: 'office-building' },
-    { id: 'WFH', label: 'Work from home', icon: 'home' },
+    { id: 'WFH', label: 'Home', icon: 'home' },
     { id: 'CLIENT', label: 'Client', icon: 'account-group' },
 ];
 
