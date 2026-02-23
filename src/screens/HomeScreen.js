@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,10 +8,10 @@ import {
     Modal,
     Platform,
     ScrollView,
-    Alert,
     PermissionsAndroid,
     RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/SimpleLineIcons';
 import Icons from 'react-native-vector-icons/MaterialCommunityIcons';
 import moment from 'moment';
@@ -28,6 +28,26 @@ const HomeScreen = ({ route, navigation }) => {
     const [currentTime, setCurrentTime] = useState(moment());
     const [remarks, setRemarks] = useState('');
 
+    const [overlay, setOverlay] = useState({
+        visible: false,
+        message: '',
+        type: 'loading',
+        onConfirm: null,
+        onCancel: null
+    });
+
+    const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
+    const showLoading = useCallback((message = 'Processing...') => setOverlay({ visible: true, message, type: 'loading' }), []);
+    const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
+    const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
+    const showConfirm = useCallback((message, onConfirm, onCancel = hideOverlay) => setOverlay({
+        visible: true,
+        message,
+        type: 'confirm',
+        onConfirm: () => { hideOverlay(); onConfirm(); },
+        onCancel
+    }), [hideOverlay]);
+
     // UI State driven by Backend APIs
     const [showCheckInButton, setShowCheckInButton] = useState(true);
     const [locationStatusMessage, setLocationStatusMessage] = useState(null);
@@ -36,9 +56,13 @@ const HomeScreen = ({ route, navigation }) => {
     const [activeWorkMode, setActiveWorkMode] = useState(null);
     const [selectedWorkMode, setSelectedWorkMode] = useState(null);
     const [showLocationModal, setShowLocationModal] = useState(false);
-    const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    const hour = new Date().getHours();
+    let greeting = "Welcome back";
+    if (hour < 12) greeting = "Good Morning";
+    else if (hour < 18) greeting = "Good Afternoon";
+    else greeting = "Good Evening";
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentTime(moment());
@@ -48,14 +72,14 @@ const HomeScreen = ({ route, navigation }) => {
         fetchInitialData();
 
         return () => clearInterval(timer);
-    }, []);
+    }, [fetchInitialData]);
 
-    const fetchInitialData = async (isRefreshing = false) => {
-        if (!isRefreshing) setLoading(true);
+    const fetchInitialData = React.useCallback(async (isRefreshing = false) => {
+        if (!isRefreshing) showLoading('Fetching data...');
         try {
             const userInfo = await AuthService.getUserInfo();
             if (!userInfo?.userId) {
-                if (!isRefreshing) setLoading(false);
+                if (!isRefreshing) hideOverlay();
                 return;
             }
 
@@ -100,7 +124,7 @@ const HomeScreen = ({ route, navigation }) => {
                     }
                 } else {
                     console.error('Status API Error:', error);
-                    Alert.alert('Error', 'Failed to fetch latest attendance status.');
+                    showError('Failed to fetch latest attendance status.');
                 }
             }
 
@@ -108,27 +132,23 @@ const HomeScreen = ({ route, navigation }) => {
             console.error('Fetch Initial Data General Error:', error);
         } finally {
             if (isRefreshing) setRefreshing(false);
-            else setLoading(false);
+            else hideOverlay();
         }
-    };
+    }, [showLoading, hideOverlay, showError]);
 
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);
         fetchInitialData(true);
-    }, []);
+    }, [fetchInitialData]);
 
     const handleLogout = () => {
-        Alert.alert('Logout', 'Do you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await AuthService.signOut();
-                    navigation.replace('Login');
-                }
-            },
-        ]);
+        showConfirm(
+            'Do you want to logout?',
+            async () => {
+                await AuthService.signOut();
+                navigation.replace('Login');
+            }
+        );
     };
 
     const requestLocationPermission = async () => {
@@ -153,15 +173,12 @@ const HomeScreen = ({ route, navigation }) => {
         const isCurrentlyCheckedIn = !showCheckInButton;
 
         if (isCurrentlyCheckedIn && selectedWorkMode !== activeWorkMode) {
-            Alert.alert(
-                'Location Mismatch',
-                'Location mismatch. Please check out using the same work mode.'
-            );
+            showError('Location mismatch. Please check out using the same work mode.');
             return;
         }
 
         setShowLocationModal(false);
-        setLoading(true);
+        showLoading(showCheckInButton ? 'Checking In...' : 'Checking Out...');
 
         try {
             const userInfo = await AuthService.getUserInfo();
@@ -188,13 +205,13 @@ const HomeScreen = ({ route, navigation }) => {
                         const isInsideGeofence = distance <= OFFICE_LOCATION.RADIUS;
 
                         if (!isInsideGeofence) {
-                            setLoading(false);
+                            hideOverlay();
                             if (showCheckInButton) {
                                 // Rule 1: Office Check-In Rule
-                                Alert.alert('Geofence Error', 'You must be at the office location to check in as Office.');
+                                showError('You must be at the office location to check in as Office.');
                             } else {
                                 // Rule 2: Office Check-Out Rule
-                                Alert.alert('Geofence Error', 'Office check-out is not allowed outside the office location.');
+                                showError('Office check-out is not allowed outside the office location.');
                             }
                             // Rule 3 is also covered here as both in/out are blocked if outside
                             return;
@@ -213,7 +230,7 @@ const HomeScreen = ({ route, navigation }) => {
                         await AttendanceService.checkInOut(payload);
 
                         setRemarks('');
-                        Alert.alert('Success', `Successfully ${showCheckInButton ? 'Checked In' : 'Checked Out'}!`);
+                        showSuccess(`Successfully ${showCheckInButton ? 'Checked In' : 'Checked Out'}!`);
 
                         await fetchInitialData();
                     } catch (error) {
@@ -230,25 +247,22 @@ const HomeScreen = ({ route, navigation }) => {
                             }
                         }
 
-                        Alert.alert('Action Restricted', errorMessage);
-                        setLoading(false);
+                        showError(errorMessage);
                     }
                 },
                 (error) => {
-                    setLoading(false);
-                    Alert.alert('Location Error', 'Unable to fetch GPS location.');
+                    showError('Unable to fetch GPS location.');
                 },
                 { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
             );
 
         } catch (error) {
-            setLoading(false);
-            Alert.alert('Error', 'An unexpected error occurred.');
+            showError('An unexpected error occurred.');
         }
     };
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
@@ -258,7 +272,7 @@ const HomeScreen = ({ route, navigation }) => {
             >
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.welcomeText}>Welcome back,</Text>
+                        <Text style={styles.welcomeText}>{greeting}!</Text>
                         <Text style={styles.userNameText}>{userName || 'User'}</Text>
                     </View>
                     <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
@@ -294,7 +308,7 @@ const HomeScreen = ({ route, navigation }) => {
                             <TouchableOpacity
                                 style={[styles.button, showCheckInButton ? styles.checkInBtn : styles.checkOutBtn]}
                                 onPress={handleAttendanceClick}
-                                disabled={loading}
+                                disabled={overlay.visible}
                             >
                                 <Text style={styles.buttonText}>
                                     {showCheckInButton ? 'Check In' : 'Check Out'}
@@ -396,12 +410,8 @@ const HomeScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
             </Modal>
 
-            <LoadingOverlay
-                visible={loading}
-                message={locationStatusMessage}
-                showCheckInButton={showCheckInButton}
-            />
-        </View>
+            <LoadingOverlay {...overlay} />
+        </SafeAreaView>
     );
 };
 
@@ -409,7 +419,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8f9fa' },
     scrollContent: { padding: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-    welcomeText: { fontSize: 14, color: '#666' },
+    welcomeText: { fontSize: 14, color: '#666', fontWeight: '500' },
     userNameText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
     logoutBtn: { padding: 8 },
     card: { backgroundColor: '#fff', borderRadius: 15, padding: 20, marginBottom: 20, ...SHADOW },

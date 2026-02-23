@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -6,7 +6,10 @@ import {
     TouchableOpacity,
     Image,
     ActivityIndicator,
+    ScrollView,
+    Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AuthService from '../services/AuthService';
 import LoadingOverlay from '../components/LoadingOverlay';
 import { COLORS, SHADOW } from '../utils/theme';
@@ -22,9 +25,9 @@ const LoginScreen = ({ navigation }) => {
         onCancel: null
     });
 
-    const hideOverlay = () => setOverlay(prev => ({ ...prev, visible: false }));
-    const showLoading = (message = 'Authenticating...') => setOverlay({ visible: true, message, type: 'loading' });
-    const showError = (message) => setOverlay({ visible: true, message, type: 'error', onCancel: hideOverlay });
+    const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
+    const showLoading = useCallback((message = 'Authenticating...') => setOverlay({ visible: true, message, type: 'loading' }), []);
+    const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
 
     useEffect(() => {
         (async () => {
@@ -70,43 +73,57 @@ const LoginScreen = ({ navigation }) => {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.content}>
-                <View style={styles.logoSection}>
-                    <Text style={styles.logoText}>ipro</Text>
+        <SafeAreaView style={styles.container}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                <View style={styles.headerSpacer} />
+
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require('../assets/iPro_white.png')}
+                        resizeMode='contain'
+                        style={styles.logo}
+                    />
                 </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.title}>Login to your account</Text>
-                    <Text style={styles.subtitle}>
-                        Login with your organization's email and password through below Microsoft login
-                    </Text>
+                <View style={styles.content}>
+                    <View style={styles.card}>
+                        <Text style={styles.title}>Login to your account</Text>
+                        <Text style={styles.subtitle}>
+                            Login with your organization's email and password through below Microsoft login
+                        </Text>
 
-                    <TouchableOpacity
-                        style={styles.microsoftButton}
-                        onPress={handleMicrosoftLogin}
-                        disabled={isAzureLoading || overlay.visible}
-                    >
-                        {isAzureLoading ? (
-                            <ActivityIndicator color={COLORS.primary} />
-                        ) : (
-                            <View style={styles.buttonContent}>
-                                <Image
-                                    source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg' }}
-                                    style={styles.msIcon}
-                                    resizeMode="contain"
-                                />
-                                <Text style={styles.buttonText}>Sign in with Microsoft</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.microsoftButton}
+                            onPress={handleMicrosoftLogin}
+                            disabled={isAzureLoading || overlay.visible}
+                        >
+                            {isAzureLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <View style={styles.buttonContent}>
+                                    <Image
+                                        source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg' }}
+                                        style={styles.msIcon}
+                                        resizeMode="contain"
+                                    />
+                                    <Text style={styles.buttonText}>Sign in with Microsoft</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
-                <Text style={styles.footerText}>2026. All Rights Reserved.</Text>
-            </View>
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>2026. All Rights Reserved.</Text>
+                </View>
+            </ScrollView>
 
             <LoadingOverlay {...overlay} />
-        </View>
+        </SafeAreaView>
     );
 };
 
@@ -116,52 +133,67 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.secondary,
     },
+    scrollContent: {
+        flexGrow: 1,
+        paddingHorizontal: 24,
+    },
+    headerSpacer: {
+        height: Platform.OS === 'ios' ? 20 : 40, // Reduced space as SafeAreaView handles top inset
+    },
+    logoContainer: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    logo: {
+        width: 140,
+        height: 140,
+    },
     content: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: COLORS.white,
-    },
-    logoSection: {
-        marginBottom: 40,
-    },
-    logoText: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#333',
+        justifyContent: 'flex-start',
     },
     card: {
-        backgroundColor: COLORS.white,
-        borderRadius: 12,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderWidth: 1,
+        borderRadius: 20,
         padding: 30,
         width: '100%',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         ...SHADOW,
         alignItems: 'center',
     },
     title: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: COLORS.primary,
-        marginBottom: 10,
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: COLORS.white,
+        marginBottom: 12,
     },
     subtitle: {
         fontSize: 14,
-        color: '#666',
+        color: 'rgba(255, 255, 255, 0.8)',
         textAlign: 'center',
-        marginBottom: 30,
+        marginBottom: 32,
         lineHeight: 20,
+    },
+    footer: {
+        paddingVertical: 30,
+        alignItems: 'center',
+    },
+    footerText: {
+        color: 'rgba(255, 255, 255, 0.5)',
+        fontSize: 12,
+        fontWeight: '500',
     },
     microsoftButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#ccc',
-        paddingVertical: 12,
+        backgroundColor: COLORS.primary,
+        paddingVertical: 14,
         paddingHorizontal: 20,
-        borderRadius: 4,
+        borderRadius: 10,
         width: '100%',
+        ...SHADOW,
     },
     buttonContent: {
         flexDirection: 'row',
@@ -174,15 +206,9 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         fontSize: 16,
-        color: '#333',
-        fontWeight: '500',
-    },
-    footerText: {
-        position: 'absolute',
-        bottom: 30,
-        color: '#999',
-        fontSize: 12,
-    },
+        color: COLORS.white,
+        fontWeight: '600',
+    }
 });
 
 export default LoginScreen;

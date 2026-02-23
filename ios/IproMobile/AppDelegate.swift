@@ -31,6 +31,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     return true
   }
+
+  func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+  ) -> Bool {
+    if url.scheme == "msauth" {
+        return (reactNativeDelegate as? RCTDefaultReactNativeFactoryDelegate)?.application?(app, open: url, options: options) ?? false
+    }
+    return false
+  }
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
