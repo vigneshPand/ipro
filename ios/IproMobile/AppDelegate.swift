@@ -1,6 +1,7 @@
 import UIKit
 import React
 import React_RCTAppDelegate
+import React_RCTLinking
 import ReactAppDependencyProvider
 
 @main
@@ -37,10 +38,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
-    if url.scheme == "msauth" {
-        return (reactNativeDelegate as? RCTDefaultReactNativeFactoryDelegate)?.application?(app, open: url, options: options) ?? false
-    }
-    return false
+    return RCTLinkingManager.application(app, open: url, options: options)
   }
 }
 
