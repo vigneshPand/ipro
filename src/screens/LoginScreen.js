@@ -36,7 +36,7 @@ const LoginScreen = ({ navigation }) => {
                 const userInfo = await AuthService.getUserInfo();
                 navigation.reset({
                     index: 0,
-                    routes: [{ name: 'Home', params: userInfo }],
+                    routes: [{ name: 'Main', params: userInfo }],
                 });
             }
         })();
@@ -58,7 +58,7 @@ const LoginScreen = ({ navigation }) => {
             navigation.reset({
                 index: 0,
                 routes: [{
-                    name: 'Home',
+                    name: 'Main',
                     params: userData
                 }],
             });

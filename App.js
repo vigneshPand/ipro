@@ -3,13 +3,17 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 function App() {
     return (
-        <SafeAreaProvider>
-            <NavigationContainer>
-                <AppNavigator />
-            </NavigationContainer>
-        </SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaProvider>
+                <NavigationContainer>
+                    <AppNavigator />
+                </NavigationContainer>
+            </SafeAreaProvider>
+        </GestureHandlerRootView>
     );
 }
 

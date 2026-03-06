@@ -24,7 +24,7 @@ import { calculateDistance } from '../utils/LocationHelper';
 import LoadingOverlay from '../components/LoadingOverlay';
 
 const HomeScreen = ({ route, navigation }) => {
-    const userName = route.params?.userName || route.params?.displayName;
+    const userName = route?.params?.userName || route?.params?.displayName;
     const [currentTime, setCurrentTime] = useState(moment());
     const [remarks, setRemarks] = useState('');
 
@@ -63,6 +63,7 @@ const HomeScreen = ({ route, navigation }) => {
     if (hour < 12) greeting = "Good Morning";
     else if (hour < 18) greeting = "Good Afternoon";
     else greeting = "Good Evening";
+
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentTime(moment());
@@ -146,7 +147,18 @@ const HomeScreen = ({ route, navigation }) => {
             'Do you want to logout?',
             async () => {
                 await AuthService.signOut();
-                navigation.replace('Login');
+                const parent = navigation.getParent();
+                if (parent) {
+                    parent.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                    });
+                } else {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                    });
+                }
             }
         );
     };
@@ -185,7 +197,18 @@ const HomeScreen = ({ route, navigation }) => {
             const token = await AuthService.getBackendToken();
 
             if (!token) {
-                navigation.replace('Login');
+                const parent = navigation.getParent();
+                if (parent) {
+                    parent.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                    });
+                } else {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                    });
+                }
                 return;
             }
 
@@ -270,6 +293,11 @@ const HomeScreen = ({ route, navigation }) => {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
             >
+                <View style={styles.pb}>
+                    <TouchableOpacity onPress={() => navigation.openDrawer()}>
+                        <Icon name="menu" size={20} color={COLORS.secondary} />
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.welcomeText}>{greeting}!</Text>
@@ -482,6 +510,9 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         lineHeight: 20,
     },
+    pb: {
+        paddingBottom: 10
+    }
 });
 
 export default HomeScreen;

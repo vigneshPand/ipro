@@ -8,6 +8,19 @@ export const COLORS = {
     text: '#333333',
     textLight: '#666666',
     border: '#d1d1d1',
+    blue: '#3E699B',
+    bg: '#f3f4f6',
+    grayText: '#6b7280',
+    inactiveTab: '#9ca3af',
+    darkText: '#374151',
+    lightBlue: '#5bb8d5',
+    red: '#d32f2f',
+    gray: '#e5e7eb',
+    pageBg: 'rgba(0, 0, 0, 0.4)',
+    inputBg: '#f9fafb',
+    grayBg: '#e5e7eb',
+    orange: '#f28e67',
+    yellow: '#eab308'
 };
 
 export const SHADOW = {
