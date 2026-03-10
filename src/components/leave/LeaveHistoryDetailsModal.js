@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLeaveStore from '../../store/useLeaveStore';
+import WithdrawConfirmationModal from './WithdrawConfirmationModal';
+import AuthService from '../../services/AuthService';
+import LoadingOverlay from '../LoadingOverlay';
 
 const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -18,8 +21,55 @@ const formatDisplayDate = (dateStr) => {
     return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
 };
 
-const LeaveHistoryDetailsModal = ({ visible, onClose }) => {
-    const { selectedLeaveDetails, loadingLeaveDetails } = useLeaveStore();
+const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
+    const { selectedLeaveDetails, loadingLeaveDetails, withdrawLeave, fetchPendingLeaves } = useLeaveStore();
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+    const [overlay, setOverlay] = useState({
+        visible: false,
+        message: '',
+        type: 'loading',
+        onConfirm: null,
+        onCancel: null
+    });
+
+    const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
+    const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
+    const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
+
+
+    const handleWithdraw = async (remarks) => {
+        setIsWithdrawing(true);
+        const requestId = selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+        const leaveId = selectedLeaveDetails?.leaveId || (selectedLeaveDetails?.days && selectedLeaveDetails.days[0]?.leaveId) || 0;
+        const session = (selectedLeaveDetails?.days && selectedLeaveDetails.days[0]?.session) || "Full Day";
+
+        const res = await withdrawLeave(requestId, leaveId, session, remarks);
+        setIsWithdrawing(false);
+
+        if (res.success) {
+            showSuccess(res.message, () => {
+                setShowWithdrawModal(false);
+                onClose();
+            });
+
+            // Refresh pending leaves
+            try {
+                const user = await AuthService.getUserInfo();
+                if (user?.userId) {
+                    await fetchPendingLeaves(user.userId, new Date().getFullYear());
+                }
+            } catch (err) {
+                console.error('Refresh error', err);
+            }
+        } else {
+            setShowWithdrawModal(false);
+            showError(res.message);
+        }
+    };
+
+    // The withdraw button logic is now purely based on the tab context passed down via 'showWithdraw'
 
     return (
         <Modal
@@ -130,9 +180,29 @@ const LeaveHistoryDetailsModal = ({ visible, onClose }) => {
                                     <Text style={styles.noAttachmentText}>No attachments</Text>
                                 )}
                             </View>
+
+                            {/* Withdraw Button if Pending Tab */}
+                            {showWithdraw && (
+                                <View style={styles.footerActionRow}>
+                                    <TouchableOpacity style={styles.withdrawBtn} onPress={() => setShowWithdrawModal(true)}>
+                                        <Text style={styles.withdrawBtnText}>WITHDRAW</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
                         </ScrollView>
                     )}
                 </View>
+
+                {/* Withdraw Confirmation Modal */}
+                <WithdrawConfirmationModal
+                    visible={showWithdrawModal}
+                    onClose={() => setShowWithdrawModal(false)}
+                    onConfirm={handleWithdraw}
+                    isLoading={isWithdrawing}
+                />
+
+                <LoadingOverlay {...overlay} />
             </View>
         </Modal>
     );
@@ -303,6 +373,23 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#9ca3af',
         fontStyle: 'italic',
+    },
+    footerActionRow: {
+        marginTop: 20,
+        marginBottom: 10,
+        alignItems: 'flex-end',
+    },
+    withdrawBtn: {
+        backgroundColor: '#d32f2f', // Red matching screenshot
+        paddingVertical: 10,
+        paddingHorizontal: 24,
+        borderRadius: 6,
+    },
+    withdrawBtnText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 14,
+        letterSpacing: 0.5,
     },
 });
 

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import RNFS from 'react-native-fs';
 
 const COLORS = {
     red: '#d32f2f',
@@ -9,24 +10,56 @@ const COLORS = {
     blue: '#4171ea',
 };
 
-const AttachFilePicker = ({ onFileSelected }) => {
+const AttachFilePicker = ({ onFileSelected, onError }) => {
     const [selectedFile, setSelectedFile] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const handleAttachFile = async () => {
         try {
             const result = await DocumentPicker.pickSingle({
-                type: [types.images, types.pdf, types.doc, types.docx],
+                type: [types.images, types.pdf, types.doc],
             });
-            setSelectedFile(result);
+
+            const allowedTypes = [
+                "image/jpg",
+                "image/png",
+                "application/pdf",
+                "application/msword"
+            ];
+
+            if (!allowedTypes.includes(result.type)) {
+                if (onError) onError('Only JPG, PNG, PDF, and DOC files are allowed.');
+                return;
+            }
+
+            const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+            if (result.size && result.size > MAX_SIZE) {
+                if (onError) onError('File size exceeds 5MB limit.');
+                return;
+            }
+
+            setIsProcessing(true);
+            const base64Data = await RNFS.readFile(result.uri, "base64");
+
+            const fileDataObj = {
+                fileName: result.name,
+                fileType: result.type,
+                fileData: base64Data
+            };
+
+            setSelectedFile(fileDataObj);
             if (onFileSelected) {
-                onFileSelected(result);
+                onFileSelected(fileDataObj);
             }
         } catch (err) {
             if (DocumentPicker.isCancel(err)) {
                 // User cancelled the picker
             } else {
                 console.warn(err);
+                if (onError) onError('Failed to process file.');
             }
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -43,11 +76,16 @@ const AttachFilePicker = ({ onFileSelected }) => {
                 <View style={styles.selectedFileBox}>
                     <Icon name="file-document-outline" size={20} color={COLORS.grayText} style={styles.fileIcon} />
                     <Text style={styles.fileNameText} numberOfLines={1} ellipsizeMode="middle">
-                        {selectedFile.name}
+                        {selectedFile.fileName}
                     </Text>
                     <TouchableOpacity onPress={handleRemoveFile} style={styles.removeButton}>
                         <Icon name="close" size={18} color={COLORS.red} />
                     </TouchableOpacity>
+                </View>
+            ) : isProcessing ? (
+                <View style={styles.attachBox}>
+                    <ActivityIndicator size="small" color={COLORS.blue} />
+                    <Text style={[styles.attachText, styles.processingText]}>Processing file...</Text>
                 </View>
             ) : (
                 <TouchableOpacity style={styles.attachBox} onPress={handleAttachFile}>
@@ -100,6 +138,9 @@ const styles = StyleSheet.create({
     removeButton: {
         padding: 4,
         marginLeft: 8,
+    },
+    processingText: {
+        marginTop: 4,
     },
 });
 

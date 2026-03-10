@@ -80,7 +80,6 @@ const useLeaveStore = create((set) => ({
                 loadingPending: false
             });
         } catch (error) {
-            console.error('Pending API error', error);
             set({ loadingPending: false });
         }
     },
@@ -105,7 +104,6 @@ const useLeaveStore = create((set) => ({
                 historyLoading: false
             });
         } catch (error) {
-            console.error('History API error', error);
             set({ historyLoading: false });
         }
     },
@@ -125,8 +123,26 @@ const useLeaveStore = create((set) => ({
                 loadingLeaveDetails: false
             });
         } catch (error) {
-            console.error('Leave details API error', error);
             set({ loadingLeaveDetails: false });
+        }
+    },
+
+    withdrawLeave: async (requestId, leaveId, session, comments) => {
+        try {
+            const params = {
+                requestId,
+                leaveId,
+                session,
+                withDrawType: "all",
+                comments: comments || ""
+            };
+            const response = await apiClient.put("/leave/withdraw", {}, { params });
+            return { success: true, message: response.data?.message || 'Leave request withdrawn successfully' };
+        } catch (error) {
+            return {
+                success: false,
+                message: error?.response?.data?.message || error.message || 'Error withdrawing leave'
+            };
         }
     },
 }));

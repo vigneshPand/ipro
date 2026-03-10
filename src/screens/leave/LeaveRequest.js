@@ -15,13 +15,12 @@ const parseNumber = (val) => {
     return parseFloat(val) || 0;
 };
 
-// Pure SVG Pie Chart component to match exactly web styling
-const SimplePie = ({ used, total, grayOnly }) => {
-    // SVG logic for a simple 2-color pie chart
-    const r = 20; // radius of the path
-    const strokeW = 40; // thick stroke = solid circle
-    const size = r * 2 + strokeW; // 80 -> fits nicely inside the card
-    const c = size / 2; // 40
+// Pure SVG Pie Chart component — 3 slices: Requested (yellow), Used (red), Balance (blue)
+const SimplePie = ({ requested, used, balance, total, grayOnly }) => {
+    const r = 20;
+    const strokeW = 40;
+    const size = r * 2 + strokeW; // 80
+    const c = size / 2;
 
     if (grayOnly || total === 0) {
         return (
@@ -32,25 +31,39 @@ const SimplePie = ({ used, total, grayOnly }) => {
     }
 
     const circ = 2 * Math.PI * r;
+
+    // Build slices: each slice starts where the previous ended
+    // Slice order: Balance (base), then Used on top, then Requested on top
+    const requestedRatio = requested / total;
     const usedRatio = used / total;
+
+    const requestedDash = requestedRatio * circ;
     const usedDash = usedRatio * circ;
 
     return (
         <Svg width={size} height={size}>
-            {/* Rotate -90 so it starts from top, like a standard pie */}
             <G rotation="-90" origin={`${c}, ${c}`}>
-                {/* Base circle: entirely Balance (Blue) */}
+                {/* Base: Balance (Blue) fills entire circle */}
                 <Circle cx={c} cy={c} r={r} fill="transparent" stroke={COLORS.blue} strokeWidth={strokeW} />
-                {/* Top circle overlay: Used (Orange) */}
-                {usedRatio > 0 && (
+                {/* Used slice (Red/Orange) — rendered on top of balance */}
+                {used > 0 && (
                     <Circle
-                        cx={c}
-                        cy={c}
-                        r={r}
+                        cx={c} cy={c} r={r}
                         fill="transparent"
-                        stroke={COLORS.orange}
+                        stroke={COLORS.red || '#ef4444'}
                         strokeWidth={strokeW}
                         strokeDasharray={`${usedDash} ${circ}`}
+                        strokeDashoffset={-requestedDash}
+                    />
+                )}
+                {/* Requested slice (Yellow/Orange) — first slice from top */}
+                {requested > 0 && (
+                    <Circle
+                        cx={c} cy={c} r={r}
+                        fill="transparent"
+                        stroke={COLORS.yellow || '#f59e0b'}
+                        strokeWidth={strokeW}
+                        strokeDasharray={`${requestedDash} ${circ}`}
                     />
                 )}
             </G>
@@ -59,9 +72,10 @@ const SimplePie = ({ used, total, grayOnly }) => {
 };
 
 const LeaveCard = ({ item, navigation }) => {
-    const usedVal = parseNumber(item.used || '0') + parseNumber(item.requested || '0') + parseNumber(item.approved || '0');
+    const requestedVal = parseNumber(item.requested || '0');
+    const usedVal = parseNumber(item.used || '0') + parseNumber(item.approved || '0');
     const balanceVal = parseNumber(item.balance || '0');
-    const totalVal = usedVal + balanceVal;
+    const totalVal = requestedVal + usedVal + balanceVal;
 
     const isLossOfPay = item.title === 'Loss Of Pay';
     const isBereavement = item.title === 'Bereavement Leave';
@@ -76,7 +90,7 @@ const LeaveCard = ({ item, navigation }) => {
             </Text>
 
             <View style={styles.chartWrapper}>
-                <SimplePie used={usedVal} balance={balanceVal} total={totalVal} grayOnly={grayOnly} />
+                <SimplePie requested={requestedVal} used={usedVal} balance={balanceVal} total={totalVal} grayOnly={grayOnly} />
             </View>
 
             <View style={styles.statsGrid}>

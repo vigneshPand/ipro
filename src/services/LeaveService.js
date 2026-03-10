@@ -13,7 +13,6 @@ class LeaveService {
             });
             return response.data;
         } catch (error) {
-            console.error('getValidLeaveDates Error:', error);
             // If the backend returns a validation message, throw it so the caller can display it
             const message = error?.response?.data?.message || error?.response?.data;
             if (message && typeof message === 'string') {
@@ -30,6 +29,36 @@ class LeaveService {
         } catch (error) {
             console.error('getBereavementLeaveTypes Error:', error);
             return [];
+        }
+    }
+
+    async getCCList(userId) {
+        try {
+            const response = await apiClient.get(`/projects/employees/${userId}/cc-list`);
+            return response.data;
+        } catch (error) {
+            console.error('getCCList Error:', error);
+            return [];
+        }
+    }
+
+    async getNameList(userId) {
+        try {
+            const response = await apiClient.get(`/projects/employees/${userId}/managers/names`);
+            return response.data;
+        } catch (error) {
+            console.error('getNameList Error:', error);
+            return [];
+        }
+    }
+
+    async getManagerInfo(emailId) {
+        try {
+            const response = await apiClient.get(`/userMasterController/getMyManager?emailId=${emailId}`);
+            return response.data;
+        } catch (error) {
+            console.error('getManagerInfo Error:', error);
+            return null;
         }
     }
 }

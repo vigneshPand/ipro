@@ -5,6 +5,8 @@ import HomeScreen from '../screens/HomeScreen';
 import CustomDrawerContent from './CustomDrawerContent';
 import LeaveRequestScreen from '../screens/leave/LeaveRequest';
 import LeaveHistoryScreen from '../screens/leave/LeaveHistory';
+import CompOffHistoryScreen from '../screens/leave/CompOffHistoryScreen';
+import HolidayScreen from '../screens/holiday/HolidayScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -56,11 +58,11 @@ const DrawerNavigator = ({ route }) => {
             />
 
             {/* Sub-menu hidden screens */}
-            <Drawer.Screen name="Holidays" component={PlaceholderScreen} />
+            <Drawer.Screen name="Holidays" component={HolidayScreen} />
             <Drawer.Screen name="LeaveRequest" component={LeaveRequestScreen} />
             <Drawer.Screen name="LeaveHistory" component={LeaveHistoryScreen} />
             <Drawer.Screen name="CompOffGrantRequest" component={PlaceholderScreen} />
-            <Drawer.Screen name="CompOffHistory" component={PlaceholderScreen} />
+            <Drawer.Screen name="CompOffHistory" component={CompOffHistoryScreen} />
         </Drawer.Navigator>
     );
 };

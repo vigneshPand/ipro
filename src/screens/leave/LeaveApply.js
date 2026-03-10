@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AuthService from '../../services/AuthService';
 import LeaveService from '../../services/LeaveService';
+import apiClient from '../../api/client';
 import AttachFilePicker from '../../components/AttachFilePicker';
 import DatePickerField from '../../components/leave/DatePickerField';
 import HalfDaySelector from '../../components/leave/HalfDaySelector';
@@ -11,26 +12,9 @@ import ReportsToSection from '../../components/leave/ReportsToSection';
 import useLeaveRequestStore from '../../store/useLeaveRequestStore';
 import useLeaveStore from '../../store/useLeaveStore';
 import { COLORS } from '../../utils/theme';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
-// Helper: format Date to YYYY-MM-DD for API calls
-const formatToAPI = (date) => {
-    if (!date) return '';
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-};
-
-// Helper: parse YYYY-MM-DD safely into a local Date object without UTC overlap
-const parseAPIDate = (dateStr) => {
-    const [y, m, d] = dateStr.split('-');
-    return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
-};
-
-// Helper: format Date for display (e.g. "5-Mar-2026")
-const formatDate = (date) => {
-    return `${date.getDate()}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
-};
+import { formatToAPI, parseAPIDate, formatDate, formatPermissionTime, convertTimeToMinutes } from '../../utils/dateUtils';
 
 const LeaveApplyScreen = ({ navigation, route }) => {
     const { leaveType, balance } = route.params;
@@ -46,6 +30,15 @@ const LeaveApplyScreen = ({ navigation, route }) => {
     const [reason, setReason] = useState('');
     const [managerInfo, setManagerInfo] = useState({ name: 'Loading...', profile: null });
     const [noOfDays, setNoOfDays] = useState(0);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedFile2, setSelectedFile2] = useState(null);
+
+    // Permission Leave state
+    const [permissionDate, setPermissionDate] = useState(null);
+    const [rawDigits, setRawDigits] = useState('');
+    const [displayTime, setDisplayTime] = useState('');
+    const [isSubmittingPermission, setIsSubmittingPermission] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     // Bereavement state
     const [bereavementTypes, setBereavementTypes] = useState([]);
@@ -58,26 +51,62 @@ const LeaveApplyScreen = ({ navigation, route }) => {
     const [isValidatingDates, setIsValidatingDates] = useState(false);
     const validationTimer = useRef(null);
 
+    // CC List state
+    const [ccList, setCCList] = useState([]);
+    const [nameList, setNameList] = useState([]);
+    const [selectedCC, setSelectedCC] = useState([]);
+
     // POST API state from Zustand
     const { isSubmitting, submitLeaveRequest } = useLeaveRequestStore();
 
-    // ─── Load manager info on mount ───
+    const [overlay, setOverlay] = useState({
+        visible: false,
+        message: '',
+        type: 'loading',
+        onConfirm: null,
+        onCancel: null
+    });
+
+    const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
+    const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
+    const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
+
     useEffect(() => {
-        const loadManager = async () => {
+        const loadCCList = async () => {
             try {
                 const userInfo = await AuthService.getUserInfo();
-                if (userInfo && userInfo.reportTo) {
-                    setManagerInfo({
-                        name: userInfo.reportTo.displayName || 'Manager',
-                        profile: userInfo.reportTo.profile,
-                        designation: userInfo.reportTo.designation || 'Manager'
-                    });
-                }
+                const userId = userInfo?.userId;
+                const cc = await LeaveService.getCCList(userId);
+                setCCList(cc);
+            } catch (error) {
+                console.warn('Failed to load CC list', error);
+            }
+        };
+
+        const loadNameList = async () => {
+            try {
+                const userInfo = await AuthService.getUserInfo();
+                const userId = userInfo?.userId;
+                const name = await LeaveService.getNameList(userId);
+                setNameList(name);
+            } catch (error) {
+                console.warn('Failed to load name list', error);
+            }
+        };
+
+        const loadManagerInfo = async () => {
+            try {
+                const userInfo = await AuthService.getUserInfo();
+                const userId = userInfo?.userId;
+                const manager = await LeaveService.getManagerInfo(userId);
+                setManagerInfo(manager);
             } catch (error) {
                 console.warn('Failed to load manager info', error);
             }
         };
-        loadManager();
+        loadCCList();
+        loadNameList();
+        loadManagerInfo();
     }, []);
 
     // ─── Fetch Bereavement Types ───
@@ -88,7 +117,6 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                 const types = await LeaveService.getBereavementLeaveTypes();
                 setBereavementTypes(types);
             } catch (error) {
-                console.log('Failed to load bereavement types', error);
             }
         };
         fetchBereavementTypes();
@@ -233,55 +261,113 @@ const LeaveApplyScreen = ({ navigation, route }) => {
 
     // ─── Handle Apply ───
     const handleApply = async () => {
-        if (isBalanceLow || isSubmitting) return;
-        if (!fromDate || !toDate) {
-            Alert.alert('Error', 'Please select From and To dates');
-            return;
-        }
-        if (leaveType === 'Bereavement Leave' && !selectedBereavementType) {
-            Alert.alert('Error', 'Please select a bereavement type');
-            return;
-        }
-        if (!reason.trim()) {
-            Alert.alert('Error', 'Please enter a reason');
-            return;
-        }
-        if (!hasValidSessions) {
-            Alert.alert('Error', 'Please wait for date validation to complete');
-            return;
+        setErrorMessage('');
+        if (isBalanceLow || (isSubmitting || isSubmittingPermission)) return;
+
+        if (leaveType === 'Permission') {
+            if (!permissionDate) {
+                showError('Please select a date');
+                return;
+            }
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+            if (!rawDigits || !timeRegex.test(displayTime)) {
+                showError('Please enter a valid time in HH:MM format');
+                return;
+            }
+            if (!reason.trim()) {
+                showError('Please enter a reason');
+                return;
+            }
+        } else {
+            if (!fromDate || !toDate) {
+                showError('Please select From and To dates');
+                return;
+            }
+            if (leaveType === 'Bereavement Leave' && !selectedBereavementType) {
+                showError('Please select a bereavement type');
+                return;
+            }
+            if (!reason.trim()) {
+                showError('Please enter a reason');
+                return;
+            }
+            if (!hasValidSessions) {
+                showError('Please wait for date validation to complete');
+                return;
+            }
         }
 
         try {
             const userInfo = await AuthService.getUserInfo();
             const userId = userInfo?.userId;
-            const leaveDatesPayload = buildLeaveDatesPayload();
 
-            const payload = {
-                reason: reason.trim(),
-                type: leaveType,
-                userId,
-                leaveDates: JSON.stringify(leaveDatesPayload),
-            };
+            if (leaveType === 'Permission') {
+                setIsSubmittingPermission(true);
+                const minutes = convertTimeToMinutes(displayTime);
 
-            if (leaveType === 'Bereavement Leave' && selectedBereavementType) {
-                payload.bereavementLeaveType = selectedBereavementType.id;
+                const payload = {
+                    permissionTime: minutes,
+                    date: formatToAPI(permissionDate),
+                    userId,
+                    reason: reason.trim(),
+                };
+
+                if (selectedCC.length > 0) {
+                    payload.cc = selectedCC.map(item => item.email);
+                }
+
+                await apiClient.post("/leave/permissionRequest", null, {
+                    params: payload,
+                });
+            } else {
+                const leaveDatesPayload = buildLeaveDatesPayload();
+
+                const payload = {
+                    reason: reason.trim(),
+                    type: leaveType,
+                    userId,
+                    leaveDates: JSON.stringify(leaveDatesPayload),
+                };
+
+                if (leaveType === 'Bereavement Leave' && selectedBereavementType) {
+                    payload.bereavementLeaveType = selectedBereavementType.id;
+                }
+
+                if (selectedFile) {
+                    payload.fileName = selectedFile.fileName;
+                    payload.fileType = selectedFile.fileType;
+                    payload.fileData = selectedFile.fileData;
+                }
+
+                if (leaveType === 'Maternity Leave' && selectedFile2) {
+                    payload.fileName2 = selectedFile2.fileName;
+                    payload.fileType2 = selectedFile2.fileType;
+                    payload.fileData2 = selectedFile2.fileData;
+                }
+
+                if (selectedCC.length > 0) {
+                    payload.cc = selectedCC.map(item => item.email);
+                }
+
+                await submitLeaveRequest(payload);
             }
-
-            console.log('payload', payload);
-
-            await submitLeaveRequest(payload);
 
             // Refresh leave balances so LeaveRequest screen updates immediately
             const { fetchLeaveBalances } = useLeaveStore.getState();
             fetchLeaveBalances(userId, new Date().getFullYear());
 
-            Alert.alert('Success', 'Leave request submitted successfully');
-            navigation.goBack();
+            showSuccess('Leave request submitted successfully', () => {
+                navigation.goBack();
+            });
         } catch (error) {
-            Alert.alert(
-                'Error',
-                error?.response?.data?.message || 'Unable to submit leave request'
-            );
+            if (leaveType === 'Permission') {
+                const message = error?.response?.data?.message || error?.response?.data || "Something went wrong. Please try again.";
+                setErrorMessage(typeof message === 'string' ? message : JSON.stringify(message));
+            } else {
+                showError(error?.response?.data?.message || 'Unable to submit leave request');
+            }
+        } finally {
+            if (leaveType === 'Permission') setIsSubmittingPermission(false);
         }
     };
 
@@ -321,7 +407,11 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                         <View style={styles.infoBar}>
                             <Text style={styles.infoText}>Leave Type : <Text style={styles.infoTextBold}>{leaveType}</Text></Text>
                             {leaveType !== 'Bereavement Leave' && leaveType !== 'Loss Of Pay' && (
-                                <Text style={styles.infoText}> Balance: <Text style={styles.infoTextBold}>{balance ?? 0}</Text></Text>
+                                <Text style={styles.infoText}> Balance: <Text style={styles.infoTextBold}>
+                                    {leaveType === 'Permission'
+                                        ? (balance ? String(balance).replace(/hrs/i, '').trim() + ' hrs' : '0 hrs')
+                                        : (balance ?? 0)}
+                                </Text></Text>
                             )}
                         </View>
 
@@ -363,60 +453,108 @@ const LeaveApplyScreen = ({ navigation, route }) => {
 
                         <View style={styles.divider} />
 
-                        {/* Date Picker Row */}
-                        <View style={styles.dateRow}>
-                            <DatePickerField
-                                label="From"
-                                date={fromDate}
-                                onDateChange={handleFromDateChange}
-                                minimumDate={new Date()}
-                                formatDate={formatDate}
-                                disabled={isDateDisabled}
-                            />
-                            <DatePickerField
-                                label="To"
-                                date={toDate}
-                                onDateChange={handleToDateChange}
-                                minimumDate={fromDate || new Date()}
-                                formatDate={formatDate}
-                                disabled={isDateDisabled}
-                            />
-                        </View>
+                        {leaveType === 'Permission' ? (
+                            <View style={styles.dateRow}>
+                                <DatePickerField
+                                    label="Date"
+                                    date={permissionDate}
+                                    onDateChange={setPermissionDate}
+                                    minimumDate={new Date()}
+                                    formatDate={formatDate}
+                                    disabled={false}
+                                />
+                                <View style={styles.timeInputBlock}>
+                                    <Text style={styles.label}>Time<Text style={styles.asterisk}>*</Text></Text>
+                                    <TextInput
+                                        style={styles.timeInput}
+                                        placeholder="e.g. 02:30 hrs"
+                                        placeholderTextColor="#9ca3af"
+                                        value={displayTime}
+                                        keyboardType="numeric"
+                                        maxLength={5}
+                                        onChangeText={(text) => {
+                                            const digits = text.replace(/\D/g, "");
 
-                        {isDateDisabled && (
-                            <Text style={styles.warningTextSmall}>Please select Bereavement Type first</Text>
-                        )}
+                                            // handle deletion
+                                            if (digits.length < rawDigits.length) {
+                                                setRawDigits("");
+                                                setDisplayTime("");
+                                                return;
+                                            }
 
-                        <View style={styles.daysBlock}>
-                            <Text style={[styles.infoText, styles.mt5]}>No.of days: <Text style={styles.infoTextBold}>{noOfDays}</Text></Text>
-                        </View>
+                                            if (digits.length <= 4) {
+                                                setRawDigits(digits);
 
-                        {/* Validation Loader */}
-                        {isValidatingDates && (
-                            <View style={styles.validationLoader}>
-                                <ActivityIndicator size="small" color={COLORS.blue} />
-                            </View>
-                        )}
+                                                const formatted = formatPermissionTime(digits);
 
-                        {/* Half Day Selectors — only show when validation passes */}
-                        {fromDate && toDate && !validationError && !isValidatingDates && hasValidSessions && (
-                            <View style={[styles.sessionRow, styles.zIndex10, styles.mt10]}>
-                                {Object.keys(validDatesMap).sort().map(dateStr => (
-                                    <HalfDaySelector
-                                        key={dateStr}
-                                        date={parseAPIDate(dateStr)}
-                                        selectedSession={selectedSessions[dateStr]}
-                                        sessionTypes={validDatesMap[dateStr]}
-                                        onSelect={(newSession) => {
-                                            setSelectedSessions(prev => ({
-                                                ...prev,
-                                                [dateStr]: newSession
-                                            }));
+                                                if (digits.length === 4 && formatted) {
+                                                    setDisplayTime(formatted);
+                                                } else {
+                                                    setDisplayTime(digits);
+                                                }
+                                            }
                                         }}
-                                        formatDate={formatDate}
                                     />
-                                ))}
+                                </View>
                             </View>
+                        ) : (
+                            <>
+                                {/* Date Picker Row */}
+                                <View style={styles.dateRow}>
+                                    <DatePickerField
+                                        label="From"
+                                        date={fromDate}
+                                        onDateChange={handleFromDateChange}
+                                        minimumDate={new Date()}
+                                        formatDate={formatDate}
+                                        disabled={isDateDisabled}
+                                    />
+                                    <DatePickerField
+                                        label="To"
+                                        date={toDate}
+                                        onDateChange={handleToDateChange}
+                                        minimumDate={fromDate || new Date()}
+                                        formatDate={formatDate}
+                                        disabled={isDateDisabled}
+                                    />
+                                </View>
+
+                                {isDateDisabled && (
+                                    <Text style={styles.warningTextSmall}>Please select Bereavement Type first</Text>
+                                )}
+
+                                <View style={styles.daysBlock}>
+                                    <Text style={[styles.infoText, styles.mt5]}>No.of days: <Text style={styles.infoTextBold}>{noOfDays}</Text></Text>
+                                </View>
+
+                                {/* Validation Loader */}
+                                {isValidatingDates && (
+                                    <View style={styles.validationLoader}>
+                                        <ActivityIndicator size="small" color={COLORS.blue} />
+                                    </View>
+                                )}
+
+                                {/* Half Day Selectors — only show when validation passes */}
+                                {fromDate && toDate && !validationError && !isValidatingDates && hasValidSessions && (
+                                    <View style={[styles.sessionRow, styles.mt10]}>
+                                        {Object.keys(validDatesMap).sort().map(dateStr => (
+                                            <HalfDaySelector
+                                                key={dateStr}
+                                                date={parseAPIDate(dateStr)}
+                                                selectedSession={selectedSessions[dateStr]}
+                                                sessionTypes={validDatesMap[dateStr]}
+                                                onSelect={(newSession) => {
+                                                    setSelectedSessions(prev => ({
+                                                        ...prev,
+                                                        [dateStr]: newSession
+                                                    }));
+                                                }}
+                                                formatDate={formatDate}
+                                            />
+                                        ))}
+                                    </View>
+                                )}
+                            </>
                         )}
 
                         {/* Warning Message */}
@@ -427,7 +565,12 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                         <View style={[styles.divider, styles.mt10]} />
 
                         {/* Reports To Section */}
-                        <ReportsToSection managerInfo={managerInfo} />
+                        <ReportsToSection
+                            managerInfo={managerInfo}
+                            ccList={ccList}
+                            selectedCC={selectedCC}
+                            setSelectedCC={setSelectedCC}
+                        />
 
                         {/* Reason & Attach Section */}
                         <View style={styles.reasonAttachRow}>
@@ -444,29 +587,48 @@ const LeaveApplyScreen = ({ navigation, route }) => {
 
                             <View style={styles.attachBlock}>
                                 <AttachFilePicker
-                                    onFileSelected={(file) => {
-                                        // Handle file selection
-                                    }}
+                                    onFileSelected={setSelectedFile}
+                                    onError={showError}
                                 />
                             </View>
                         </View>
 
+                        {/* Additional Attachment for Maternity Leave */}
+                        {leaveType === 'Maternity Leave' && (
+                            <View style={styles.reasonAttachRow}>
+                                <View style={styles.reasonBlock}>
+                                    {/* Empty flex space to keep alignment with upper row */}
+                                </View>
+                                <View style={styles.attachBlock}>
+                                    <AttachFilePicker
+                                        onFileSelected={setSelectedFile2}
+                                        onError={showError}
+                                    />
+                                </View>
+                            </View>
+                        )}
+
                         <View style={[styles.divider, styles.mt16]} />
+
+                        {/* Error Message */}
+                        {errorMessage ? (
+                            <Text style={styles.errorText}>{errorMessage}</Text>
+                        ) : null}
 
                         {/* Buttons Row */}
                         <View style={styles.actionRow}>
                             <TouchableOpacity
-                                style={[styles.actionButton, styles.applyButton, (isBalanceLow || isSubmitting) && styles.disabledButton]}
-                                disabled={isBalanceLow || isSubmitting}
+                                style={[styles.actionButton, styles.applyButton, (isBalanceLow || isSubmitting || isSubmittingPermission) && styles.disabledButton]}
+                                disabled={isBalanceLow || isSubmitting || isSubmittingPermission}
                                 onPress={handleApply}
                             >
-                                {isSubmitting ? (
+                                {isSubmitting || isSubmittingPermission ? (
                                     <ActivityIndicator size="small" color="#fff" />
                                 ) : (
                                     <Text style={styles.applyButtonText}>Apply</Text>
                                 )}
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={() => navigation.goBack()} disabled={isSubmitting}>
+                            <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={() => navigation.goBack()} disabled={isSubmitting || isSubmittingPermission}>
                                 <Text style={styles.cancelButtonText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
@@ -474,6 +636,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                     </ScrollView>
                 </View>
             </KeyboardAvoidingView>
+            <LoadingOverlay {...overlay} />
         </SafeAreaView>
     );
 };
@@ -520,6 +683,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 16,
+        overflow: 'visible',
     },
     infoBar: {
         flexDirection: 'row',
@@ -549,12 +713,30 @@ const styles = StyleSheet.create({
     sessionRow: {
         flexDirection: 'column',
         alignItems: 'flex-start',
+        zIndex: 2000,
+        elevation: 10,
+        overflow: 'visible',
     },
     daysBlock: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-end',
         marginTop: 2,
+    },
+    timeInputBlock: {
+        flex: 1,
+        marginLeft: 16,
+    },
+    timeInput: {
+        height: 38,
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        borderRadius: 6,
+        paddingHorizontal: 10,
+        color: COLORS.darkText,
+        fontSize: 13,
+        marginLeft: 2,
+        backgroundColor: COLORS.white,
     },
     label: {
         fontSize: 14,
@@ -603,6 +785,12 @@ const styles = StyleSheet.create({
     attachBlock: {
         flex: 1,
         justifyContent: 'flex-end',
+    },
+    errorText: {
+        color: COLORS.red || 'red',
+        fontSize: 13,
+        marginBottom: 10,
+        textAlign: 'center',
     },
     actionRow: {
         flexDirection: 'row',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import DatePicker from 'react-native-date-picker';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 
@@ -22,18 +22,20 @@ const DatePickerField = ({ label, date, onDateChange, minimumDate, formatDate, d
                 </Text>
                 <Icon name="calendar-month-outline" size={20} color={disabled ? '#9ca3af' : COLORS.blue} />
             </TouchableOpacity>
-            <DatePicker
-                modal
-                mode="date"
-                open={open}
-                date={date || new Date()}
-                minimumDate={minimumDate || new Date()}
-                onConfirm={(selectedDate) => {
-                    setOpen(false);
-                    onDateChange(selectedDate);
-                }}
-                onCancel={() => setOpen(false)}
-            />
+            {open && (
+                <DateTimePicker
+                    value={date || new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                    minimumDate={minimumDate || new Date()}
+                    onChange={(event, selectedDate) => {
+                        setOpen(false);
+                        if (selectedDate) {
+                            onDateChange(selectedDate);
+                        }
+                    }}
+                />
+            )}
         </View>
     );
 };

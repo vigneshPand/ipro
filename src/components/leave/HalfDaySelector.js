@@ -47,12 +47,16 @@ const HalfDaySelector = ({ date, selectedSession, sessionTypes, onSelect, format
 const styles = StyleSheet.create({
     dateBlock: {
         flex: 1,
+        zIndex: 999,
+        overflow: 'visible',
     },
     halfDayRow: {
         flexDirection: 'row',
         width: '100%',
         alignItems: 'center',
         marginBottom: 8,
+        zIndex: 999,
+        overflow: 'visible',
     },
     indicatorStrip: {
         width: 4,
@@ -71,6 +75,9 @@ const styles = StyleSheet.create({
     dropdownContainer: {
         flex: 1,
         position: 'relative',
+        zIndex: 9999,
+        elevation: 10,
+        overflow: 'visible',
     },
     dropdownBox: {
         flexDirection: 'row',
@@ -97,8 +104,8 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e5e7eb',
         borderRadius: 4,
-        zIndex: 999,
-        elevation: 8,
+        zIndex: 5000,
+        elevation: 15,
     },
     dropdownOption: {
         padding: 8,

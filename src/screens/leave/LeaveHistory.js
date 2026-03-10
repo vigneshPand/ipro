@@ -185,6 +185,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
             <LeaveHistoryDetailsModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
+                showWithdraw={activeTab === 'Pending'}
             />
 
         </SafeAreaView>
