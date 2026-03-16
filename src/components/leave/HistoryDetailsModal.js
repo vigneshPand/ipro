@@ -1,6 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import AppModal from '../common/AppModal';
 import CCChips from './CCChips';
 
 const getStatusColor = (status) => {
@@ -25,92 +24,53 @@ const HistoryDetailsModal = ({ visible, onClose, detailsData }) => {
     const assignedOrReviewed = isPending ? detailsData.assignToName : detailsData.reviewByName;
 
     return (
-        <Modal
+        <AppModal
             visible={visible}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={onClose}
+            onClose={onClose}
+            title="Details"
+            heightPercentage="85%"
         >
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalCard}>
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Details</Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                            <Icon name="close" size={24} color="#374151" />
-                        </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* Status Badge */}
+                <View style={styles.statusBadgeRow}>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailsData.status) }]}>
+                        <Text style={styles.statusBadgeText}>{detailsData.status}</Text>
                     </View>
-
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                        {/* Status Badge */}
-                        <View style={styles.statusBadgeRow}>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailsData.status) }]}>
-                                <Text style={styles.statusBadgeText}>{detailsData.status}</Text>
-                            </View>
-                        </View>
-
-                        {/* Applied On */}
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Applied On</Text>
-                            <Text style={styles.detailValue}>{formatDisplayDate(detailsData.appliedOn)}</Text>
-                        </View>
-
-                        {/* Approval Pending With OR Reviewed By */}
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>{isPending ? 'Approval Pending With' : 'Reviewed By'}</Text>
-                            <Text style={styles.detailValue}>{assignedOrReviewed || '-'}</Text>
-                        </View>
-
-                        {/* CC members */}
-                        {detailsData.ccList && detailsData.ccList.length > 0 && (
-                            <View style={styles.sectionBlock}>
-                                <Text style={styles.sectionTitle}>CC</Text>
-                                <CCChips ccList={detailsData.ccList} />
-                            </View>
-                        )}
-
-                        {/* Reason */}
-                        <View style={styles.reasonBlock}>
-                            <Text style={styles.detailLabel}>Reason</Text>
-                            <View style={styles.reasonValueBox}>
-                                <Text style={styles.reasonValueText}>{detailsData.reason || '-'}</Text>
-                            </View>
-                        </View>
-                    </ScrollView>
                 </View>
-            </View>
-        </Modal>
+
+                {/* Applied On */}
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Applied On</Text>
+                    <Text style={styles.detailValue}>{formatDisplayDate(detailsData.appliedOn)}</Text>
+                </View>
+
+                {/* Approval Pending With OR Reviewed By */}
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{isPending ? 'Approval Pending With' : 'Reviewed By'}</Text>
+                    <Text style={styles.detailValue}>{assignedOrReviewed || '-'}</Text>
+                </View>
+
+                {/* CC members */}
+                {detailsData.ccList && detailsData.ccList.length > 0 && (
+                    <View style={styles.sectionBlock}>
+                        <Text style={styles.sectionTitle}>CC</Text>
+                        <CCChips ccList={detailsData.ccList} />
+                    </View>
+                )}
+
+                {/* Reason */}
+                <View style={styles.reasonBlock}>
+                    <Text style={styles.detailLabel}>Reason</Text>
+                    <View style={styles.reasonValueBox}>
+                        <Text style={styles.reasonValueText}>{detailsData.reason || '-'}</Text>
+                    </View>
+                </View>
+            </ScrollView>
+        </AppModal>
     );
 };
 
 const styles = StyleSheet.create({
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    modalCard: {
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        maxHeight: '85%',
-        paddingBottom: 20,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#1f2937',
-    },
-    closeBtn: {
-        padding: 4,
-    },
     scrollContent: {
         padding: 16,
     },

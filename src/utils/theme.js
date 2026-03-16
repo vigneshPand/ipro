@@ -20,7 +20,14 @@ export const COLORS = {
     inputBg: '#f9fafb',
     grayBg: '#e5e7eb',
     orange: '#f28e67',
-    yellow: '#eab308'
+    yellow: '#eab308',
+    // Status colors for filter badges and indicators
+    statusApproved: '#10b981',
+    statusRejected: '#ef4444',
+    statusPending: '#f59e0b',
+    statusWithdraw: '#a855f7',
+    statusTransfer: '#3b82f6',
+    statusDefault: '#6b7280',
 };
 
 export const SHADOW = {

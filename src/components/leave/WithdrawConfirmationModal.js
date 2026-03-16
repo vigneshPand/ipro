@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import AppModal from '../common/AppModal';
 import { COLORS } from '../../utils/theme';
 
 const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading }) => {
@@ -23,86 +23,64 @@ const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading }) =
     };
 
     return (
-        <Modal
+        <AppModal
             visible={visible}
-            transparent={true}
+            onClose={handleClose}
+            title="Withdraw Confirmation"
             animationType="fade"
-            onRequestClose={handleClose}
+            position="center"
+            headerStyle={styles.header}
+            titleStyle={styles.headerTitle}
+            closeIconColor="#fff"
         >
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Withdraw Confirmation</Text>
-                        <TouchableOpacity onPress={handleClose} disabled={isLoading}>
-                            <Icon name="close-circle" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
+            <View style={styles.body}>
+                <Text style={styles.messageText}>
+                    Are you sure you want to withdraw this request?
+                </Text>
 
-                    {/* Body */}
-                    <View style={styles.body}>
-                        <Text style={styles.messageText}>
-                            Are you sure you want to withdraw this request?
-                        </Text>
+                <TextInput
+                    style={[styles.input, error ? styles.inputError : null]}
+                    placeholder="Enter remarks"
+                    placeholderTextColor="#9ca3af"
+                    multiline
+                    numberOfLines={4}
+                    value={remarks}
+                    onChangeText={(text) => {
+                        setRemarks(text);
+                        if (error) setError('');
+                    }}
+                    editable={!isLoading}
+                />
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-                        <TextInput
-                            style={[styles.input, error ? styles.inputError : null]}
-                            placeholder="Enter remarks"
-                            placeholderTextColor="#9ca3af"
-                            multiline
-                            numberOfLines={4}
-                            value={remarks}
-                            onChangeText={(text) => {
-                                setRemarks(text);
-                                if (error) setError('');
-                            }}
-                            editable={!isLoading}
-                        />
-                        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {/* Footer Buttons */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={handleClose}
+                        disabled={isLoading}
+                    >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
 
-                        {/* Footer Buttons */}
-                        <View style={styles.footer}>
-                            <TouchableOpacity
-                                style={styles.cancelButton}
-                                onPress={handleClose}
-                                disabled={isLoading}
-                            >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.okButton, isLoading && styles.disabledButton]}
-                                onPress={handleConfirm}
-                                disabled={isLoading}
-                            >
-                                {isLoading ? (
-                                    <ActivityIndicator size="small" color="#fff" />
-                                ) : (
-                                    <Text style={styles.okButtonText}>OK</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    <TouchableOpacity
+                        style={[styles.okButton, isLoading && styles.disabledButton]}
+                        onPress={handleConfirm}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Text style={styles.okButtonText}>OK</Text>
+                        )}
+                    </TouchableOpacity>
                 </View>
             </View>
-        </Modal>
+        </AppModal>
     );
 };
 
 const styles = StyleSheet.create({
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-    },
-    modalContent: {
-        width: '100%',
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        overflow: 'hidden',
-    },
     header: {
         backgroundColor: COLORS.blue,
         flexDirection: 'row',

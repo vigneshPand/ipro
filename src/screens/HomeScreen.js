@@ -40,13 +40,6 @@ const HomeScreen = ({ route, navigation }) => {
     const showLoading = useCallback((message = 'Processing...') => setOverlay({ visible: true, message, type: 'loading' }), []);
     const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
     const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
-    const showConfirm = useCallback((message, onConfirm, onCancel = hideOverlay) => setOverlay({
-        visible: true,
-        message,
-        type: 'confirm',
-        onConfirm: () => { hideOverlay(); onConfirm(); },
-        onCancel
-    }), [hideOverlay]);
 
     // UI State driven by Backend APIs
     const [showCheckInButton, setShowCheckInButton] = useState(true);
@@ -142,26 +135,6 @@ const HomeScreen = ({ route, navigation }) => {
         fetchInitialData(true);
     }, [fetchInitialData]);
 
-    const handleLogout = () => {
-        showConfirm(
-            'Do you want to logout?',
-            async () => {
-                await AuthService.signOut();
-                const parent = navigation.getParent();
-                if (parent) {
-                    parent.reset({
-                        index: 0,
-                        routes: [{ name: 'Login' }],
-                    });
-                } else {
-                    navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'Login' }],
-                    });
-                }
-            }
-        );
-    };
 
     const requestLocationPermission = async () => {
         if (Platform.OS === 'android') {
@@ -303,9 +276,6 @@ const HomeScreen = ({ route, navigation }) => {
                         <Text style={styles.welcomeText}>{greeting}!</Text>
                         <Text style={styles.userNameText}>{userName || 'User'}</Text>
                     </View>
-                    <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                        <Icon name="logout" size={20} color={COLORS.secondary} />
-                    </TouchableOpacity>
                 </View>
 
                 {/* Attendance Card */}

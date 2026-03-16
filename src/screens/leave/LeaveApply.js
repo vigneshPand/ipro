@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AuthService from '../../services/AuthService';
 import LeaveService from '../../services/LeaveService';
-import apiClient from '../../api/client';
+import AuthService from '../../services/AuthService';
 import AttachFilePicker from '../../components/AttachFilePicker';
 import DatePickerField from '../../components/leave/DatePickerField';
 import HalfDaySelector from '../../components/leave/HalfDaySelector';
@@ -31,7 +30,6 @@ const LeaveApplyScreen = ({ navigation, route }) => {
     const [managerInfo, setManagerInfo] = useState({ name: 'Loading...', profile: null });
     const [noOfDays, setNoOfDays] = useState(0);
     const [selectedFile, setSelectedFile] = useState(null);
-    const [selectedFile2, setSelectedFile2] = useState(null);
 
     // Permission Leave state
     const [permissionDate, setPermissionDate] = useState(null);
@@ -44,6 +42,14 @@ const LeaveApplyScreen = ({ navigation, route }) => {
     const [bereavementTypes, setBereavementTypes] = useState([]);
     const [selectedBereavementType, setSelectedBereavementType] = useState(null);
     const [showBereavementDropdown, setShowBereavementDropdown] = useState(false);
+
+    // Paternity state
+    const [parentalCategories, setParentalCategories] = useState([]);
+    const [selectedParentalCategory, setSelectedParentalCategory] = useState(null);
+    const [showParentalDropdown, setShowParentalDropdown] = useState(false);
+    const [hrList, setHrList] = useState([]);
+    const [selectedHR, setSelectedHR] = useState(null);
+    const [showHRDropdown, setShowHRDropdown] = useState(false);
 
     // Validation API state
     const [validDatesMap, setValidDatesMap] = useState({});
@@ -94,6 +100,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
             }
         };
 
+
         const loadManagerInfo = async () => {
             try {
                 const userInfo = await AuthService.getUserInfo();
@@ -115,12 +122,54 @@ const LeaveApplyScreen = ({ navigation, route }) => {
         const fetchBereavementTypes = async () => {
             try {
                 const types = await LeaveService.getBereavementLeaveTypes();
-                setBereavementTypes(types);
+                setBereavementTypes(types || []);
             } catch (error) {
             }
         };
         fetchBereavementTypes();
     }, [leaveType]);
+
+    // ─── Fetch Paternity Leave Data ───
+    useEffect(() => {
+        if (leaveType !== 'Paternity Leave') return;
+
+        const fetchPaternityData = async () => {
+            try {
+                // Fetch Categories
+                const categoriesData = await LeaveService.getParentalLeaveCategories('Paternity Leave');
+                if (categoriesData) {
+                    const mappedCategories = Object.keys(categoriesData).map(key => ({
+                        label: key,
+                        value: key,
+                        days: categoriesData[key]
+                    }));
+                    setParentalCategories(mappedCategories);
+                }
+
+                // Fetch HR List
+                const hrData = await LeaveService.getHRList();
+                setHrList(hrData || []);
+            } catch (error) {
+                // console.error('fetchPaternityData Error:', error);
+            }
+        };
+        fetchPaternityData();
+    }, [leaveType]);
+
+    // ─── Reset fields on Parental Category Change ───
+    useEffect(() => {
+        if (leaveType === 'Paternity Leave') {
+            setToDate(null);
+            setValidDatesMap({});
+            setValidationError(null);
+            setSelectedSessions({});
+            setIsValidatingDates(false);
+            if (validationTimer.current) {
+                clearTimeout(validationTimer.current);
+                validationTimer.current = null;
+            }
+        }
+    }, [selectedParentalCategory, leaveType]);
 
     // ─── Reset fields on Bereavement Type Change ───
     useEffect(() => {
@@ -157,6 +206,10 @@ const LeaveApplyScreen = ({ navigation, route }) => {
             return;
         }
 
+        if (leaveType === 'Permission' || leaveType === 'Work From Home') {
+            return;
+        }
+
         if (leaveType === 'Bereavement Leave' && !selectedBereavementType) {
             setValidationError('Please select bereavement type first');
             setIsValidatingDates(false);
@@ -179,6 +232,10 @@ const LeaveApplyScreen = ({ navigation, route }) => {
 
                 if (leaveType === 'Bereavement Leave' && selectedBereavementType) {
                     apiParams.bereavementLeaveType = selectedBereavementType.id;
+                }
+
+                if (leaveType === 'Paternity Leave' && selectedParentalCategory) {
+                    apiParams.maternityLeaveCategory = selectedParentalCategory.value;
                 }
 
                 const result = await LeaveService.getValidLeaveDates(apiParams);
@@ -209,7 +266,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                 validationTimer.current = null;
             }
         };
-    }, [fromDate, toDate, leaveType, selectedBereavementType]);
+    }, [fromDate, toDate, leaveType, selectedBereavementType, selectedParentalCategory]);
 
     // ─── Calculate number of days ───
     useEffect(() => {
@@ -247,11 +304,24 @@ const LeaveApplyScreen = ({ navigation, route }) => {
     }, [fromDate, toDate, validDatesMap, selectedSessions]);
 
     // ─── Derived values ───
-    const hasValidSessions = Object.keys(validDatesMap).length > 0;
-    const isBalanceLow = validationError ? true : (leaveType !== 'Bereavement Leave' && fromDate && toDate && noOfDays > balance);
+    const hasValidSessions = leaveType === 'Work From Home' ? true : Object.keys(validDatesMap).length > 0;
+    const isBalanceLow = validationError ? true : (leaveType !== 'Bereavement Leave' && leaveType !== 'Work From Home' && fromDate && toDate && noOfDays > balance);
 
     // ─── Build leaveDates payload from validDatesMap + user selections ───
     const buildLeaveDatesPayload = () => {
+        if (leaveType === 'Work From Home') {
+            const dates = [];
+            let current = new Date(fromDate);
+            const end = new Date(toDate);
+            current.setHours(0, 0, 0, 0);
+            end.setHours(0, 0, 0, 0);
+            while (current <= end) {
+                dates.push({ date: formatToAPI(current), session: 'Full Day' });
+                current.setDate(current.getDate() + 1);
+            }
+            return dates;
+        }
+
         const dateKeys = Object.keys(validDatesMap).sort();
         return dateKeys.map((dateKey) => {
             const session = selectedSessions[dateKey] || 'Full Day';
@@ -287,6 +357,18 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                 showError('Please select a bereavement type');
                 return;
             }
+            if (leaveType === 'Paternity Leave' && !selectedParentalCategory) {
+                showError('Please select a category');
+                return;
+            }
+            if (leaveType === 'Paternity Leave' && !selectedHR) {
+                showError('Please select an HR');
+                return;
+            }
+            if (leaveType === 'Paternity Leave' && !selectedFile) {
+                showError('Birth Certificate or Discharge Summary is required');
+                return;
+            }
             if (!reason.trim()) {
                 showError('Please enter a reason');
                 return;
@@ -301,6 +383,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
             const userInfo = await AuthService.getUserInfo();
             const userId = userInfo?.userId;
 
+            let successMsg = '';
             if (leaveType === 'Permission') {
                 setIsSubmittingPermission(true);
                 const minutes = convertTimeToMinutes(displayTime);
@@ -316,9 +399,11 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                     payload.cc = selectedCC.map(item => item.email);
                 }
 
-                await apiClient.post("/leave/permissionRequest", null, {
-                    params: payload,
-                });
+                const response = await LeaveService.submitPermissionRequest(payload);
+                if (!response.success) {
+                    throw new Error(response.message);
+                }
+                successMsg = response.message;
             } else {
                 const leaveDatesPayload = buildLeaveDatesPayload();
 
@@ -333,38 +418,48 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                     payload.bereavementLeaveType = selectedBereavementType.id;
                 }
 
+                if (leaveType === 'Paternity Leave' && selectedParentalCategory) {
+                    payload.maternityLeaveCategory = selectedParentalCategory.value;
+                }
+
+                if (leaveType === 'Paternity Leave' && selectedHR) {
+                    payload.hrCc = [selectedHR.mail];
+                }
+
                 if (selectedFile) {
                     payload.fileName = selectedFile.fileName;
                     payload.fileType = selectedFile.fileType;
                     payload.fileData = selectedFile.fileData;
                 }
 
-                if (leaveType === 'Maternity Leave' && selectedFile2) {
-                    payload.fileName2 = selectedFile2.fileName;
-                    payload.fileType2 = selectedFile2.fileType;
-                    payload.fileData2 = selectedFile2.fileData;
-                }
+                // if (leaveType === 'Paternity Leave' && selectedFile2) {
+                //     payload.fileName2 = selectedFile2.fileName;
+                //     payload.fileType2 = selectedFile2.fileType;
+                //     payload.fileData2 = selectedFile2.fileData;
+                // }
 
                 if (selectedCC.length > 0) {
                     payload.cc = selectedCC.map(item => item.email);
                 }
 
-                await submitLeaveRequest(payload);
+                const response = await submitLeaveRequest(payload);
+                successMsg = response?.message || response?.data?.message || 'Leave request submitted successfully';
             }
 
             // Refresh leave balances so LeaveRequest screen updates immediately
             const { fetchLeaveBalances } = useLeaveStore.getState();
             fetchLeaveBalances(userId, new Date().getFullYear());
 
-            showSuccess('Leave request submitted successfully', () => {
+            showSuccess(successMsg, () => {
                 navigation.goBack();
             });
         } catch (error) {
             if (leaveType === 'Permission') {
-                const message = error?.response?.data?.message || error?.response?.data || "Something went wrong. Please try again.";
+                const message = error?.response?.data?.message || error?.response?.data || error?.message || "Something went wrong. Please try again.";
                 setErrorMessage(typeof message === 'string' ? message : JSON.stringify(message));
             } else {
-                showError(error?.response?.data?.message || 'Unable to submit leave request');
+                const message = error?.response?.data?.message || error?.response?.data || error?.message || 'Unable to submit leave request';
+                showError(typeof message === 'string' ? message : JSON.stringify(message));
             }
         } finally {
             if (leaveType === 'Permission') setIsSubmittingPermission(false);
@@ -386,7 +481,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
         setToDate(date);
     };
 
-    const isDateDisabled = leaveType === 'Bereavement Leave' && !selectedBereavementType;
+    const isDateDisabled = (leaveType === 'Bereavement Leave' && !selectedBereavementType) || (leaveType === 'Paternity Leave' && !selectedParentalCategory);
 
     return (
         <SafeAreaView style={styles.modalBackground}>
@@ -406,7 +501,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                         {/* Top Info Bar */}
                         <View style={styles.infoBar}>
                             <Text style={styles.infoText}>Leave Type : <Text style={styles.infoTextBold}>{leaveType}</Text></Text>
-                            {leaveType !== 'Bereavement Leave' && leaveType !== 'Loss Of Pay' && (
+                            {leaveType !== 'Bereavement Leave' && leaveType !== 'Loss Of Pay' && leaveType !== 'Work From Home' && (
                                 <Text style={styles.infoText}> Balance: <Text style={styles.infoTextBold}>
                                     {leaveType === 'Permission'
                                         ? (balance ? String(balance).replace(/hrs/i, '').trim() + ' hrs' : '0 hrs')
@@ -415,7 +510,43 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                             )}
                         </View>
 
-                        {/* Bereavement Dropdown */}
+                        {/* Paternity Category Dropdown */}
+                        {leaveType === 'Paternity Leave' && (
+                            <View style={styles.bereavementContainer}>
+                                <Text style={[styles.label, styles.mb6]}>
+                                    Category<Text style={styles.asterisk}>*</Text>
+                                </Text>
+                                <View style={[styles.dropdownContainer, styles.zIndex20]}>
+                                    <TouchableOpacity
+                                        style={styles.bereavementDropdownButton}
+                                        onPress={() => setShowParentalDropdown(!showParentalDropdown)}
+                                    >
+                                        <Text style={styles.bereavementDropdownButtonText}>
+                                            {selectedParentalCategory ? selectedParentalCategory.label : 'Select Category'}
+                                        </Text>
+                                        <Icon name="menu-down" size={20} color={COLORS.darkText} />
+                                    </TouchableOpacity>
+                                    {showParentalDropdown && (
+                                        <View style={styles.bereavementDropdownList}>
+                                            {parentalCategories.map((cat, idx) => (
+                                                <TouchableOpacity
+                                                    key={idx.toString()}
+                                                    style={styles.dropdownOption}
+                                                    onPress={() => {
+                                                        setSelectedParentalCategory(cat);
+                                                        setShowParentalDropdown(false);
+                                                    }}
+                                                >
+                                                    <Text style={styles.dropdownOptionText}>{cat.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Bereavement Type Dropdown */}
                         {leaveType === 'Bereavement Leave' && (
                             <View style={styles.bereavementContainer}>
                                 <Text style={[styles.label, styles.mb6]}>
@@ -427,7 +558,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                         onPress={() => setShowBereavementDropdown(!showBereavementDropdown)}
                                     >
                                         <Text style={styles.bereavementDropdownButtonText}>
-                                            {selectedBereavementType ? selectedBereavementType.bereavementLeaveType : 'Select Type'}
+                                            {selectedBereavementType ? selectedBereavementType.bereavementLeaveType : 'Select Bereavement Type'}
                                         </Text>
                                         <Icon name="menu-down" size={20} color={COLORS.darkText} />
                                     </TouchableOpacity>
@@ -520,7 +651,9 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                 </View>
 
                                 {isDateDisabled && (
-                                    <Text style={styles.warningTextSmall}>Please select Bereavement Type first</Text>
+                                    <Text style={styles.warningTextSmall}>
+                                        {leaveType === 'Bereavement Leave' ? 'Please select Bereavement Type first' : 'Please select Category first'}
+                                    </Text>
                                 )}
 
                                 <View style={styles.daysBlock}>
@@ -567,12 +700,12 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                         {/* Reports To Section */}
                         <ReportsToSection
                             managerInfo={managerInfo}
-                            ccList={ccList}
+                            ccList={[...ccList, ...nameList].filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i)}
                             selectedCC={selectedCC}
                             setSelectedCC={setSelectedCC}
                         />
 
-                        {/* Reason & Attach Section */}
+                        {/* Reason Section */}
                         <View style={styles.reasonAttachRow}>
                             <View style={styles.reasonBlock}>
                                 <Text style={styles.label}>Reason<Text style={styles.asterisk}>*</Text></Text>
@@ -584,29 +717,53 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                     onChangeText={setReason}
                                 />
                             </View>
+                        </View>
 
+                        {/* HR Dropdown for Paternity Leave */}
+                        {leaveType === 'Paternity Leave' && (
+                            <View style={[styles.bereavementContainer, styles.mt16]}>
+                                <Text style={[styles.label, styles.mb6]}>
+                                    Select HR<Text style={styles.asterisk}>*</Text>
+                                </Text>
+                                <View style={[styles.dropdownContainer, styles.zIndex10]}>
+                                    <TouchableOpacity
+                                        style={styles.bereavementDropdownButton}
+                                        onPress={() => setShowHRDropdown(!showHRDropdown)}
+                                    >
+                                        <Text style={styles.bereavementDropdownButtonText}>
+                                            {selectedHR ? selectedHR.displayName : 'Select HR'}
+                                        </Text>
+                                        <Icon name="menu-down" size={20} color={COLORS.darkText} />
+                                    </TouchableOpacity>
+                                    {showHRDropdown && (
+                                        <ScrollView style={styles.hrDropdownList} nestedScrollEnabled={true}>
+                                            {hrList.map((hr) => (
+                                                <TouchableOpacity
+                                                    key={hr.userId.toString()}
+                                                    style={styles.dropdownOption}
+                                                    onPress={() => {
+                                                        setSelectedHR(hr);
+                                                        setShowHRDropdown(false);
+                                                    }}
+                                                >
+                                                    <Text style={styles.dropdownOptionText}>{hr.displayName}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.reasonAttachRow}>
                             <View style={styles.attachBlock}>
                                 <AttachFilePicker
                                     onFileSelected={setSelectedFile}
                                     onError={showError}
+                                    label={leaveType === 'Paternity Leave' ? 'Birth Certificate or Discharge Summary' : 'Attach File (jpg, png, pdf, doc)'}
                                 />
                             </View>
                         </View>
-
-                        {/* Additional Attachment for Maternity Leave */}
-                        {leaveType === 'Maternity Leave' && (
-                            <View style={styles.reasonAttachRow}>
-                                <View style={styles.reasonBlock}>
-                                    {/* Empty flex space to keep alignment with upper row */}
-                                </View>
-                                <View style={styles.attachBlock}>
-                                    <AttachFilePicker
-                                        onFileSelected={setSelectedFile2}
-                                        onError={showError}
-                                    />
-                                </View>
-                            </View>
-                        )}
 
                         <View style={[styles.divider, styles.mt16]} />
 
@@ -874,6 +1031,20 @@ const styles = StyleSheet.create({
     zIndex20: { zIndex: 20 },
     dropdownContainer: { flex: 1, position: 'relative' },
     mt16: { marginTop: 16 },
+    hrDropdownList: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 4,
+        zIndex: 999,
+        elevation: 10,
+        marginTop: 2,
+        maxHeight: 200,
+    },
 });
 
 export default LeaveApplyScreen;

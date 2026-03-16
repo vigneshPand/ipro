@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../utils/theme';
+import PieChart from '../../components/common/PieChart';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
 
@@ -15,73 +15,27 @@ const parseNumber = (val) => {
     return parseFloat(val) || 0;
 };
 
-// Pure SVG Pie Chart component — 3 slices: Requested (yellow), Used (red), Balance (blue)
-const SimplePie = ({ requested, used, balance, total, grayOnly }) => {
-    const r = 20;
-    const strokeW = 40;
-    const size = r * 2 + strokeW; // 80
-    const c = size / 2;
-
-    if (grayOnly || total === 0) {
-        return (
-            <Svg width={size} height={size}>
-                <Circle cx={c} cy={c} r={size / 2} fill={COLORS.grayBg} />
-            </Svg>
-        );
-    }
-
-    const circ = 2 * Math.PI * r;
-
-    // Build slices: each slice starts where the previous ended
-    // Slice order: Balance (base), then Used on top, then Requested on top
-    const requestedRatio = requested / total;
-    const usedRatio = used / total;
-
-    const requestedDash = requestedRatio * circ;
-    const usedDash = usedRatio * circ;
-
-    return (
-        <Svg width={size} height={size}>
-            <G rotation="-90" origin={`${c}, ${c}`}>
-                {/* Base: Balance (Blue) fills entire circle */}
-                <Circle cx={c} cy={c} r={r} fill="transparent" stroke={COLORS.blue} strokeWidth={strokeW} />
-                {/* Used slice (Red/Orange) — rendered on top of balance */}
-                {used > 0 && (
-                    <Circle
-                        cx={c} cy={c} r={r}
-                        fill="transparent"
-                        stroke={COLORS.red || '#ef4444'}
-                        strokeWidth={strokeW}
-                        strokeDasharray={`${usedDash} ${circ}`}
-                        strokeDashoffset={-requestedDash}
-                    />
-                )}
-                {/* Requested slice (Yellow/Orange) — first slice from top */}
-                {requested > 0 && (
-                    <Circle
-                        cx={c} cy={c} r={r}
-                        fill="transparent"
-                        stroke={COLORS.yellow || '#f59e0b'}
-                        strokeWidth={strokeW}
-                        strokeDasharray={`${requestedDash} ${circ}`}
-                    />
-                )}
-            </G>
-        </Svg>
-    );
-};
+// Extracted SimplePie logic to components/common/PieChart
 
 const LeaveCard = ({ item, navigation }) => {
     const requestedVal = parseNumber(item.requested || '0');
     const usedVal = parseNumber(item.used || '0') + parseNumber(item.approved || '0');
-    const balanceVal = parseNumber(item.balance || '0');
+    const itemBalance = item.balance !== undefined ? item.balance : item.remaining;
+    const balanceVal = parseNumber(itemBalance || '0');
     const totalVal = requestedVal + usedVal + balanceVal;
+
+    const CHART_COLORS = {
+        requested: '#f59e0b',
+        used: '#ef4444',
+        total: item.titleColor || '#3b82f6',
+        balance: '#3b82f6',
+        empty: '#e5e7eb'
+    };
 
     const isLossOfPay = item.title === 'Loss Of Pay';
     const isBereavement = item.title === 'Bereavement Leave';
-
-    // Decide if chart is pure gray
-    const grayOnly = totalVal === 0;
+    const isPaternityLeave = item.title === 'Paternity Leave';
+    const isSpecialCase = isLossOfPay || isBereavement || isPaternityLeave;
 
     return (
         <View style={styles.cardContainer}>
@@ -90,26 +44,36 @@ const LeaveCard = ({ item, navigation }) => {
             </Text>
 
             <View style={styles.chartWrapper}>
-                <SimplePie requested={requestedVal} used={usedVal} balance={balanceVal} total={totalVal} grayOnly={grayOnly} />
+                <PieChart
+                    total={totalVal}
+                    radius={20}
+                    strokeWidth={40}
+                    emptyColor={CHART_COLORS.empty}
+                    slices={[
+                        { value: totalVal, isBase: true, color: CHART_COLORS.balance }, // Balance Base
+                        { value: requestedVal, color: CHART_COLORS.requested },         // Requested first
+                        { value: usedVal, color: CHART_COLORS.used }                  // Used next
+                    ]}
+                />
             </View>
 
             <View style={styles.statsGrid}>
-                {/* ROW 1: Requested & Approved/Used for special cases, or Total & Requested for standard */}
+                {/* ROW 1: Requested & Used for special cases, or Total & Requested for standard */}
                 <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: isLossOfPay || isBereavement ? COLORS.orange : '#6fa8dc' }]} numberOfLines={1}>
-                            {isLossOfPay || isBereavement ? item.requested : item.total}
+                        <Text style={[styles.statValue, { color: isSpecialCase ? CHART_COLORS.requested : CHART_COLORS.total }]} numberOfLines={1}>
+                            {isSpecialCase ? item.requested : item.total}
                         </Text>
                         <Text style={styles.statLabel}>
-                            {isLossOfPay || isBereavement ? 'Requested' : 'Total'}
+                            {isSpecialCase ? 'Requested' : 'Total'}
                         </Text>
                     </View>
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: isLossOfPay ? COLORS.orange : isBereavement ? COLORS.orange : COLORS.yellow }]} numberOfLines={1}>
-                            {isLossOfPay ? (item.approved || '0') : isBereavement ? item.used : item.requested}
+                        <Text style={[styles.statValue, { color: isLossOfPay ? CHART_COLORS.balance : isSpecialCase ? CHART_COLORS.used : CHART_COLORS.requested }]} numberOfLines={1}>
+                            {isLossOfPay ? (item.approved || item.used || '0') : isSpecialCase ? item.used : item.requested}
                         </Text>
                         <Text style={styles.statLabel}>
-                            {isLossOfPay ? 'Approved' : isBereavement ? 'Used' : 'Requested'}
+                            {isLossOfPay ? 'Approved' : isSpecialCase ? 'Used' : 'Requested'}
                         </Text>
                     </View>
                 </View>
@@ -117,21 +81,21 @@ const LeaveCard = ({ item, navigation }) => {
                 {/* ROW 2: Empty Placeholders for special cases, or Used & Balance for standard */}
                 <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                        {isLossOfPay || isBereavement ? (
+                        {isSpecialCase ? (
                             <View style={styles.emptyStatPlaceholder} /> // Maintains fixed height
                         ) : (
                             <>
-                                <Text style={[styles.statValue, { color: COLORS.orange }]} numberOfLines={1}>{item.used}</Text>
+                                <Text style={[styles.statValue, { color: CHART_COLORS.used }]} numberOfLines={1}>{item.used}</Text>
                                 <Text style={styles.statLabel}>Used</Text>
                             </>
                         )}
                     </View>
                     <View style={styles.statItem}>
-                        {isLossOfPay || isBereavement ? (
+                        {isSpecialCase ? (
                             <View style={styles.emptyStatPlaceholder} /> // Maintains fixed height
                         ) : (
                             <>
-                                <Text style={[styles.statValue, { color: COLORS.blue }]} numberOfLines={1}>{item.balance}</Text>
+                                <Text style={[styles.statValue, { color: CHART_COLORS.balance }]} numberOfLines={1}>{itemBalance}</Text>
                                 <Text style={styles.statLabel}>Balance</Text>
                             </>
                         )}
@@ -143,7 +107,7 @@ const LeaveCard = ({ item, navigation }) => {
                 <TouchableOpacity
                     onPress={() => navigation.navigate('LeaveApply', {
                         leaveType: item.title,
-                        balance: balanceVal
+                        balance: isPaternityLeave ? 5 : balanceVal
                     })}
                     style={styles.applyButton}
                 >
@@ -158,6 +122,8 @@ const LeaveRequestScreen = ({ navigation }) => {
     const { leaveBalances, loading, error, fetchLeaveBalances } = useLeaveStore();
     const [initialLoad, setInitialLoad] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    const LeaveRequestBalance = leaveBalances.filter((item) => item?.title !== "Work From Home");
 
     const loadData = useCallback(async () => {
         try {
@@ -219,13 +185,17 @@ const LeaveRequestScreen = ({ navigation }) => {
 
         return (
             <FlatList
-                data={leaveBalances}
+                data={LeaveRequestBalance}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => <LeaveCard item={item} navigation={navigation} />}
                 numColumns={2}
                 contentContainerStyle={styles.flatListContent}
                 columnWrapperStyle={styles.columnWrapper}
                 showsVerticalScrollIndicator={false}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -252,6 +222,11 @@ const LeaveRequestScreen = ({ navigation }) => {
         </SafeAreaView>
     );
 };
+
+const { width } = Dimensions.get('window');
+const CARD_MARGIN = 8;
+const PADDING_HORIZONTAL = 8;
+const COLUMN_WIDTH = (width - PADDING_HORIZONTAL * 2 - CARD_MARGIN * 4) / 2;
 
 const styles = StyleSheet.create({
     safeArea: {
@@ -314,10 +289,10 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     cardContainer: {
-        flex: 1,
+        width: COLUMN_WIDTH,
         backgroundColor: COLORS.white,
         borderRadius: 12, // softer border radius
-        margin: 8,
+        margin: CARD_MARGIN,
         padding: 16,
         alignItems: 'center', // Centers everything inside the card vertically down the middle
         elevation: 3, // shadow for android

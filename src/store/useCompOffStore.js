@@ -9,11 +9,23 @@ const useCompOffStore = create((set, get) => ({
     loading: false,
     refreshing: false,
 
+    // Overview state
+    overview: null,
+    overviewLoading: false,
+
     // Actions
-    fetchPendingCompOff: async (year = new Date().getFullYear()) => {
+    fetchPendingCompOff: async (year = new Date().getFullYear(), extraParams = {}) => {
         set({ loading: true });
         try {
-            const response = await apiClient.get(`/comp-off-grant/pending-requests?page=0&sortBy=startDate&sortDir=asc&year=${year}`);
+            const response = await apiClient.get('/comp-off-grant/pending-requests', {
+                params: {
+                    page: 0,
+                    sortBy: 'startDate',
+                    sortDir: 'asc',
+                    year,
+                    ...extraParams,
+                },
+            });
             set({ pendingList: response.data || [] });
         } catch (error) {
             console.error('fetchPendingCompOff error:', error);
@@ -23,11 +35,21 @@ const useCompOffStore = create((set, get) => ({
         }
     },
 
-    fetchHistoryCompOff: async (year = new Date().getFullYear(), startDate, endDate) => {
+    fetchHistoryCompOff: async (year = new Date().getFullYear(), startDate, endDate, extraParams = {}) => {
         set({ loading: true });
         try {
-            const url = `/comp-off-grant/history?page=0&size=10&sortBy=start_date&year=${year}&sortDir=desc&startDate=${startDate}&endDate=${endDate}`;
-            const response = await apiClient.get(url);
+            const response = await apiClient.get('/comp-off-grant/history', {
+                params: {
+                    page: 0,
+                    size: 10,
+                    sortBy: 'start_date',
+                    sortDir: 'desc',
+                    year,
+                    startDate,
+                    endDate,
+                    ...extraParams,
+                },
+            });
             set({ historyList: response.data?.content || response.data || [] });
         } catch (error) {
             console.error('fetchHistoryCompOff error:', error);
@@ -50,10 +72,18 @@ const useCompOffStore = create((set, get) => ({
         }
     },
 
-    refreshPending: async (year = new Date().getFullYear()) => {
+    refreshPending: async (year = new Date().getFullYear(), extraParams = {}) => {
         set({ refreshing: true });
         try {
-            const response = await apiClient.get(`/comp-off-grant/pending-requests?page=0&sortBy=startDate&sortDir=asc&year=${year}`);
+            const response = await apiClient.get('/comp-off-grant/pending-requests', {
+                params: {
+                    page: 0,
+                    sortBy: 'startDate',
+                    sortDir: 'asc',
+                    year,
+                    ...extraParams,
+                },
+            });
             set({ pendingList: response.data || [] });
         } catch (error) {
             console.error('refreshPending error:', error);
@@ -62,16 +92,48 @@ const useCompOffStore = create((set, get) => ({
         }
     },
 
-    refreshHistory: async (year = new Date().getFullYear(), startDate, endDate) => {
+    refreshHistory: async (year = new Date().getFullYear(), startDate, endDate, extraParams = {}) => {
         set({ refreshing: true });
         try {
-            const url = `/comp-off-grant/history?page=0&size=10&sortBy=start_date&year=${year}&sortDir=desc&startDate=${startDate}&endDate=${endDate}`;
-            const response = await apiClient.get(url);
+            const response = await apiClient.get('/comp-off-grant/history', {
+                params: {
+                    page: 0,
+                    size: 10,
+                    sortBy: 'start_date',
+                    sortDir: 'desc',
+                    year,
+                    startDate,
+                    endDate,
+                    ...extraParams,
+                },
+            });
             set({ historyList: response.data?.content || response.data || [] });
         } catch (error) {
             console.error('refreshHistory error:', error);
         } finally {
             set({ refreshing: false });
+        }
+    },
+
+    // Comp-Off Grant Overview
+    fetchCompOffOverview: async () => {
+        set({ overviewLoading: true });
+        try {
+            const response = await apiClient.get('/comp-off-grant/overview');
+            set({ overview: response.data || null, overviewLoading: false });
+        } catch (error) {
+            set({ overviewLoading: false });
+        }
+    },
+
+    // Apply Comp-Off Grant
+    applyCompOffGrant: async (payload) => {
+        try {
+            const response = await apiClient.post('/comp-off-grant/apply', payload);
+            return { success: true, message: response.data?.message || response.data || 'Comp-Off Grant request applied successfully' };
+        } catch (error) {
+            const msg = error?.response?.data?.message || error?.response?.data || 'Failed to apply comp-off grant';
+            return { success: false, message: typeof msg === 'string' ? msg : JSON.stringify(msg) };
         }
     },
 }));

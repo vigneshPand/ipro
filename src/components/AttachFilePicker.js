@@ -10,7 +10,7 @@ const COLORS = {
     blue: '#4171ea',
 };
 
-const AttachFilePicker = ({ onFileSelected, onError }) => {
+const AttachFilePicker = ({ onFileSelected, onError, label }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -89,7 +89,7 @@ const AttachFilePicker = ({ onFileSelected, onError }) => {
                 </View>
             ) : (
                 <TouchableOpacity style={styles.attachBox} onPress={handleAttachFile}>
-                    <Text style={styles.attachText}><Text style={styles.asterisk}>+ </Text>Attach File (jpg, png, pdf, doc)</Text>
+                    <Text style={styles.attachText}><Text style={styles.asterisk}>+ </Text>{label || 'Attach File (jpg, png, pdf, doc)'}</Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 52,
+        width: '95%',
     },
     attachText: {
         color: COLORS.grayText,

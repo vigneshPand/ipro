@@ -6,7 +6,7 @@ export const AZURE_CONFIG = {
 };
 
 export const API_CONFIG = {
-    BASE_URL: 'http://192.168.0.106:8082/api',
+    BASE_URL: 'http://10.0.2.2:8082/api',
 };
 
 export const WORK_LOCATIONS = [

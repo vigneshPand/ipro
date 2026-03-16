@@ -6,6 +6,7 @@ import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
+import useWFHStore from '../../store/useWFHStore';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
 import useHistoryFilters from '../../hooks/useHistoryFilters';
@@ -22,16 +23,17 @@ const getMonthRange = () => {
     return { fromDate: firstDay, toDate: lastDay };
 };
 
-const LeaveHistoryScreen = ({ navigation }) => {
+const WFHHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [modalVisible, setModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     const {
-        pendingLeaves, loadingPending, fetchPendingLeaves,
-        historyLeaves, historyLoading, fetchHistoryLeaves,
-        fetchLeaveDetails,
-    } = useLeaveStore();
+        pendingList, loadingPending, fetchPendingWFH, fetchNextPendingPage,
+        historyList, loadingHistory, fetchWFHHistory, fetchNextHistoryPage,
+    } = useWFHStore();
+
+    const { fetchLeaveDetails } = useLeaveStore();
 
     const {
         filters,
@@ -39,6 +41,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
         buildQueryParams,
     } = useHistoryFilters();
 
+    // Unified fetch that uses filter state
     const fetchData = useCallback(async () => {
         try {
             const user = await AuthService.getUserInfo();
@@ -48,23 +51,24 @@ const LeaveHistoryScreen = ({ navigation }) => {
             const { userId, year, pageNo, sortBy, direction, keyword, ...extraParams } = params;
 
             if (activeTab === 'Pending') {
-                await fetchPendingLeaves(user.userId, new Date().getFullYear(), extraParams);
+                await fetchPendingWFH(user.userId, new Date().getFullYear(), 0, extraParams);
             } else {
                 const finalFromDate = extraParams.fromDate;
                 const finalToDate = extraParams.toDate;
                 const { fromDate, toDate, ...historyExtraParams } = extraParams;
-                
+
                 const defaultRange = getMonthRange();
                 const fDate = finalFromDate || defaultRange.fromDate;
                 const tDate = finalToDate || defaultRange.toDate;
 
-                await fetchHistoryLeaves(user.userId, new Date().getFullYear(), fDate, tDate, historyExtraParams);
+                await fetchWFHHistory(user.userId, new Date().getFullYear(), fDate, tDate, 0, historyExtraParams);
             }
         } catch (err) {
             console.error(err);
         }
-    }, [activeTab, buildQueryParams, fetchPendingLeaves, fetchHistoryLeaves]);
+    }, [activeTab, buildQueryParams, fetchPendingWFH, fetchWFHHistory]);
 
+    // Fetch on mount and whenever filters or tab change
     useEffect(() => {
         fetchData();
     }, [fetchData, filters]);
@@ -74,9 +78,9 @@ const LeaveHistoryScreen = ({ navigation }) => {
         setActiveTab(tab);
         if (tab === 'History') {
             const { fromDate, toDate } = getMonthRange();
-            updateFilters({ fromDate, toDate, leaveTypes: [], status: [], pageNo: 0 });
+            updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
         } else {
-            updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
         }
     };
 
@@ -91,10 +95,36 @@ const LeaveHistoryScreen = ({ navigation }) => {
         fetchLeaveDetails(leave.id, leave.startDate, leave.endDate);
     };
 
+    const handleEndReached = useCallback(async () => {
+        try {
+            const user = await AuthService.getUserInfo();
+            if (!user?.userId) return;
+
+            const params = buildQueryParams(user.userId, new Date().getFullYear());
+            const { userId, year, pageNo, sortBy, direction, keyword, ...extraParams } = params;
+
+            if (activeTab === 'Pending') {
+                await fetchNextPendingPage(user.userId, new Date().getFullYear(), extraParams);
+            } else {
+                const finalFromDate = extraParams.fromDate;
+                const finalToDate = extraParams.toDate;
+                const { fromDate, toDate, ...historyExtraParams } = extraParams;
+
+                const defaultRange = getMonthRange();
+                const fDate = finalFromDate || defaultRange.fromDate;
+                const tDate = finalToDate || defaultRange.toDate;
+
+                await fetchNextHistoryPage(user.userId, new Date().getFullYear(), fDate, tDate, historyExtraParams);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }, [activeTab, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage]);
+
     const renderEmpty = () => (
         <View style={styles.emptyContainer}>
             <Icon name="folder-open-outline" size={48} color="#d1d5db" />
-            <Text style={styles.emptyText}>No leave records found</Text>
+            <Text style={styles.emptyText}>No WFH records found</Text>
         </View>
     );
 
@@ -105,7 +135,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.backBtn}>
                     <Icon name="menu" size={24} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerText}>Leave History</Text>
+                <Text style={styles.headerText}>WFH History</Text>
                 <View style={styles.headerSpacer} />
             </View>
 
@@ -133,15 +163,15 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 onResetFilters={() => {
                     if (activeTab === 'History') {
                         const { fromDate, toDate } = getMonthRange();
-                        updateFilters({ fromDate, toDate, leaveTypes: [], status: [], pageNo: 0 });
+                        updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
                     } else {
-                        updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+                        updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
                     }
                 }}
                 defaultFromDate={activeTab === 'History' ? getMonthRange().fromDate : null}
                 defaultToDate={activeTab === 'History' ? getMonthRange().toDate : null}
                 showDateFilter={true}
-                showLeaveTypeFilter={true}
+                showLeaveTypeFilter={false}
                 showStatusFilter={activeTab === 'History'}
             />
 
@@ -153,7 +183,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                     </View>
                 ) : (
                     <FlatList
-                        data={pendingLeaves}
+                        data={pendingList}
                         keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
                         renderItem={({ item }) => (
                             <PendingLeaveCard
@@ -170,23 +200,23 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         ListEmptyComponent={renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
                         initialNumToRender={10}
                         maxToRenderPerBatch={10}
                         windowSize={5}
-                        removeClippedSubviews={true}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
                     />
                 )
             ) : (
-                historyLoading && !refreshing ? (
+                loadingHistory && !refreshing ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
                 ) : (
                     <FlatList
-                        data={historyLeaves}
+                        data={historyList}
                         keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
                         renderItem={({ item }) => (
                             <HistoryLeaveCard
@@ -198,10 +228,10 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         ListEmptyComponent={renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
                         initialNumToRender={10}
                         maxToRenderPerBatch={10}
                         windowSize={5}
-                        removeClippedSubviews={true}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
@@ -214,6 +244,17 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 showWithdraw={activeTab === 'Pending'}
+                isWFH={true}
+                onWithdrawSuccess={async () => {
+                    try {
+                        const user = await AuthService.getUserInfo();
+                        if (user?.userId) {
+                            await fetchPendingWFH(user.userId, new Date().getFullYear());
+                        }
+                    } catch (err) {
+                        console.error('WFH refresh error', err);
+                    }
+                }}
             />
 
         </SafeAreaView>
@@ -292,7 +333,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    }
+    },
 });
 
-export default LeaveHistoryScreen;
+export default WFHHistoryScreen;

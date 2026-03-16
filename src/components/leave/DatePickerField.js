@@ -4,7 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 
-const DatePickerField = ({ label, date, onDateChange, minimumDate, formatDate, disabled }) => {
+const DatePickerField = ({ label, date, onDateChange, minimumDate, maximumDate, formatDate, disabled }) => {
     const [open, setOpen] = useState(false);
 
     return (
@@ -27,7 +27,8 @@ const DatePickerField = ({ label, date, onDateChange, minimumDate, formatDate, d
                     value={date || new Date()}
                     mode="date"
                     display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-                    minimumDate={minimumDate || new Date()}
+                    {...(minimumDate === null ? {} : { minimumDate: minimumDate || new Date() })}
+                    {...(maximumDate ? { maximumDate } : {})}
                     onChange={(event, selectedDate) => {
                         setOpen(false);
                         if (selectedDate) {

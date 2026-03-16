@@ -1,11 +1,14 @@
 import apiClient from '../api/client';
 
 class LeaveService {
-    async getValidLeaveDates({ from, to, userId, leaveType, bereavementLeaveType }) {
+    async getValidLeaveDates({ from, to, userId, leaveType, bereavementLeaveType, maternityLeaveCategory }) {
         try {
             const params = { from, to, userId, leaveType };
             if (bereavementLeaveType !== undefined) {
                 params.bereavementLeaveType = bereavementLeaveType;
+            }
+            if (maternityLeaveCategory !== undefined) {
+                params.maternityLeaveCategory = maternityLeaveCategory;
             }
 
             const response = await apiClient.get('/leave/getValidDates', {
@@ -28,6 +31,26 @@ class LeaveService {
             return response.data;
         } catch (error) {
             console.error('getBereavementLeaveTypes Error:', error);
+            return [];
+        }
+    }
+
+    async getParentalLeaveCategories(type) {
+        try {
+            const response = await apiClient.get(`/leave/findParentalLeaveCategories?type=${encodeURIComponent(type)}`);
+            return response.data;
+        } catch (error) {
+            console.error('getParentalLeaveCategories Error:', error);
+            return null;
+        }
+    }
+
+    async getHRList() {
+        try {
+            const response = await apiClient.get('/user-roles/list/hr');
+            return response.data;
+        } catch (error) {
+            console.error('getHRList Error:', error);
             return [];
         }
     }
@@ -59,6 +82,24 @@ class LeaveService {
         } catch (error) {
             console.error('getManagerInfo Error:', error);
             return null;
+        }
+    }
+
+    async submitPermissionRequest(payload) {
+        try {
+            const response = await apiClient.post("/leave/permissionRequest", null, {
+                params: payload,
+            });
+            return {
+                success: true,
+                message: response?.data?.message || response?.data || 'Permission request submitted successfully',
+            };
+        } catch (error) {
+            const message = error?.response?.data?.message || error?.response?.data || error?.message || 'Error submitting permission request';
+            return {
+                success: false,
+                message: typeof message === 'string' ? message : JSON.stringify(message),
+            };
         }
     }
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Alert } from 'react-native';
 import apiClient from '../api/client';
 
 // Color mapping for each leave type to maintain consistent UI
@@ -62,18 +63,20 @@ const useLeaveStore = create((set) => ({
         }
     },
 
-    fetchPendingLeaves: async (userId, year) => {
+    fetchPendingLeaves: async (userId, year, extraParams = {}) => {
         set({ loadingPending: true });
         try {
+            const params = {
+                userId,
+                year,
+                pageNo: 0,
+                sortBy: 'startDate',
+                direction: 'asc',
+                keyword: '',
+                ...extraParams,
+            };
             const response = await apiClient.get('/leave/userPendingTable', {
-                params: {
-                    userId,
-                    year,
-                    pageNo: 0,
-                    sortBy: 'startDate',
-                    direction: 'asc',
-                    keyword: ''
-                }
+                params,
             });
             set({
                 pendingLeaves: response.data?.content || [],
@@ -81,23 +84,26 @@ const useLeaveStore = create((set) => ({
             });
         } catch (error) {
             set({ loadingPending: false });
+            Alert.alert('Error', error?.response?.data?.message || 'Failed to fetch pending leaves');
         }
     },
 
-    fetchHistoryLeaves: async (userId, year, fromDate, toDate) => {
+    fetchHistoryLeaves: async (userId, year, fromDate, toDate, extraParams = {}) => {
         set({ historyLoading: true });
         try {
+            const params = {
+                userId,
+                year,
+                pageNo: 0,
+                sortBy: 'start_date',
+                direction: 'desc',
+                fromDate,
+                toDate,
+                keyword: '',
+                ...extraParams,
+            };
             const response = await apiClient.get('/leave/userHistoryTable', {
-                params: {
-                    userId,
-                    year,
-                    pageNo: 0,
-                    sortBy: 'start_date',
-                    direction: 'desc',
-                    fromDate,
-                    toDate,
-                    keyword: ''
-                }
+                params,
             });
             set({
                 historyLeaves: response.data?.content || [],
@@ -105,6 +111,7 @@ const useLeaveStore = create((set) => ({
             });
         } catch (error) {
             set({ historyLoading: false });
+            Alert.alert('Error', error?.response?.data?.message || 'Failed to fetch leave history');
         }
     },
 
@@ -124,6 +131,7 @@ const useLeaveStore = create((set) => ({
             });
         } catch (error) {
             set({ loadingLeaveDetails: false });
+            Alert.alert('Error', error?.response?.data?.message || 'Failed to fetch leave details');
         }
     },
 

@@ -11,6 +11,7 @@ const getStatusColor = (status) => {
         case 'approved': return '#10b981'; // green
         case 'rejected': return '#ef4444'; // red
         case 'pending': return '#f59e0b'; // orange
+        case 'withdraw': return '#e4b5edff'; // purple
         default: return '#6b7280'; // gray
     }
 };
@@ -21,7 +22,7 @@ const formatDisplayDate = (dateStr) => {
     return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
 };
 
-const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
+const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSuccess, isWFH = false }) => {
     const { selectedLeaveDetails, loadingLeaveDetails, withdrawLeave, fetchPendingLeaves } = useLeaveStore();
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
     const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -38,6 +39,14 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
     const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
     const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
 
+    // Reset overlay state when modal visibility changes to prevent stale popups
+    React.useEffect(() => {
+        if (!visible) {
+            setOverlay({ visible: false, message: '', type: 'loading', onConfirm: null, onCancel: null });
+            setShowWithdrawModal(false);
+        }
+    }, [visible]);
+
 
     const handleWithdraw = async (remarks) => {
         setIsWithdrawing(true);
@@ -49,19 +58,24 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
         setIsWithdrawing(false);
 
         if (res.success) {
+            setShowWithdrawModal(false); // Close withdraw modal immediately
             showSuccess(res.message, () => {
-                setShowWithdrawModal(false);
+                hideOverlay();
                 onClose();
             });
 
-            // Refresh pending leaves
-            try {
-                const user = await AuthService.getUserInfo();
-                if (user?.userId) {
-                    await fetchPendingLeaves(user.userId, new Date().getFullYear());
+            // Refresh pending list via parent callback or fallback to leave store
+            if (onWithdrawSuccess) {
+                onWithdrawSuccess();
+            } else {
+                try {
+                    const user = await AuthService.getUserInfo();
+                    if (user?.userId) {
+                        await fetchPendingLeaves(user.userId, new Date().getFullYear());
+                    }
+                } catch (err) {
+                    console.error('Refresh error', err);
                 }
-            } catch (err) {
-                console.error('Refresh error', err);
             }
         } else {
             setShowWithdrawModal(false);
@@ -90,7 +104,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
                     {loadingLeaveDetails ? (
                         <View style={styles.loaderContainer}>
                             <ActivityIndicator size="large" color="#3b82f6" />
-                            <Text style={styles.loadingText}>Loading details...</Text>
+                            {/* <Text style={styles.loadingText}>Loading details...</Text> */}
                         </View>
                     ) : !selectedLeaveDetails ? (
                         <View style={styles.loaderContainer}>
@@ -105,6 +119,12 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
                                 </View>
                             </View>
 
+                            {isWFH && (
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Request Id</Text>
+                                    <Text style={styles.detailValue}>{selectedLeaveDetails.id}</Text>
+                                </View>
+                            )}
                             {/* Leave Type */}
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Leave Type</Text>
@@ -125,14 +145,14 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw }) => {
 
                             {/* Reviewed By */}
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Reviewed By</Text>
+                                <Text style={styles.detailLabel}>Approval Pending With</Text>
                                 <Text style={styles.detailValue}>{selectedLeaveDetails.reviewByName || 'N/A'}</Text>
                             </View>
 
                             {/* Leave Dates */}
                             {selectedLeaveDetails.days && selectedLeaveDetails.days.length > 0 && (
                                 <View style={styles.sectionBlock}>
-                                    <Text style={styles.sectionTitle}>Leave Dates</Text>
+                                    <Text style={styles.sectionTitle}>Duration</Text>
                                     {selectedLeaveDetails.days.map((day, index) => (
                                         <View key={index} style={styles.dayRow}>
                                             <Text style={styles.dayDate}>{formatDisplayDate(day.date)}</Text>

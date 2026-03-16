@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS } from '../../utils/theme';
-import useCompOffStore from '../../store/useCompOffStore';
-import AuthService from '../../services/AuthService';
-import HistoryTabs from '../../components/leave/HistoryTabs';
-import HistoryCard from '../../components/leave/HistoryCard';
-import HistoryDetailsModal from '../../components/leave/HistoryDetailsModal';
+import { COLORS } from '../../../utils/theme';
+import useCompOffStore from '../../../store/useCompOffStore';
+import AuthService from '../../../services/AuthService';
+import HistoryTabs from '../../../components/leave/HistoryTabs';
+import HistoryCard from '../../../components/leave/HistoryCard';
+import HistoryDetailsModal from '../../../components/leave/HistoryDetailsModal';
+import useHistoryFilters from '../../../hooks/useHistoryFilters';
+import HistoryFilters from '../../../components/historyFilters/HistoryFilters';
 
 const getMonthRange = () => {
     const now = new Date();
@@ -29,54 +31,81 @@ const CompOffHistoryScreen = ({ navigation }) => {
         refreshPending, refreshHistory
     } = useCompOffStore();
 
-    useEffect(() => {
-        const loadPending = async () => {
-            try {
-                const user = await AuthService.getUserInfo();
-                if (user?.userId) {
-                    await fetchPendingCompOff(new Date().getFullYear());
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        loadPending();
-    }, [fetchPendingCompOff]);
+    const {
+        filters,
+        updateFilters,
+    } = useHistoryFilters();
 
-    const loadHistory = useCallback(async () => {
+    // Build extra params for Pending tab (fromDate/toDate)
+    const buildPendingExtra = useCallback(() => {
+        const extra = {};
+        if (filters.fromDate) extra.fromDate = filters.fromDate;
+        if (filters.toDate) extra.toDate = filters.toDate;
+        return extra;
+    }, [filters.fromDate, filters.toDate]);
+
+    // Build extra params for History tab (startDate/endDate/statuses)
+    const buildHistoryExtra = useCallback(() => {
+        const extra = {};
+        if (filters.status && filters.status.length > 0) {
+            extra.statuses = filters.status.join(',');
+        }
+        return extra;
+    }, [filters.status]);
+
+    // Unified fetch
+    const fetchData = useCallback(async () => {
         try {
             const user = await AuthService.getUserInfo();
-            if (user?.userId) {
-                const { fromDate, toDate } = getMonthRange();
-                await fetchHistoryCompOff(new Date().getFullYear(), fromDate, toDate);
+            if (!user?.userId) return;
+            const year = new Date().getFullYear();
+
+            if (activeTab === 'Pending') {
+                await fetchPendingCompOff(year, buildPendingExtra());
+            } else {
+                const defaultRange = getMonthRange();
+                const startDate = filters.fromDate || defaultRange.fromDate;
+                const endDate = filters.toDate || defaultRange.toDate;
+                await fetchHistoryCompOff(year, startDate, endDate, buildHistoryExtra());
             }
         } catch (err) {
             console.error(err);
         }
-    }, [fetchHistoryCompOff]);
+    }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, fetchPendingCompOff, fetchHistoryCompOff]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const handleTabChange = (tab) => {
+        if (tab === activeTab) return;
         setActiveTab(tab);
         if (tab === 'History') {
-            loadHistory();
+            const { fromDate, toDate } = getMonthRange();
+            updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
+        } else {
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
         }
     };
 
     const onRefresh = useCallback(async () => {
         try {
             const user = await AuthService.getUserInfo();
-            if (user?.userId) {
-                if (activeTab === 'Pending') {
-                    await refreshPending(new Date().getFullYear());
-                } else {
-                    const { fromDate, toDate } = getMonthRange();
-                    await refreshHistory(new Date().getFullYear(), fromDate, toDate);
-                }
+            if (!user?.userId) return;
+            const year = new Date().getFullYear();
+
+            if (activeTab === 'Pending') {
+                await refreshPending(year, buildPendingExtra());
+            } else {
+                const defaultRange = getMonthRange();
+                const startDate = filters.fromDate || defaultRange.fromDate;
+                const endDate = filters.toDate || defaultRange.toDate;
+                await refreshHistory(year, startDate, endDate, buildHistoryExtra());
             }
         } catch (err) {
             console.error(err);
         }
-    }, [activeTab, refreshPending, refreshHistory]);
+    }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, refreshPending, refreshHistory]);
 
     const handleCardPress = async (item) => {
         setModalVisible(true);
@@ -107,6 +136,25 @@ const CompOffHistoryScreen = ({ navigation }) => {
 
             <HistoryTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
+            {/* Filter Bar */}
+            <HistoryFilters
+                filters={filters}
+                onFilterChange={updateFilters}
+                onResetFilters={() => {
+                    if (activeTab === 'History') {
+                        const { fromDate, toDate } = getMonthRange();
+                        updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
+                    } else {
+                        updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+                    }
+                }}
+                defaultFromDate={activeTab === 'History' ? getMonthRange().fromDate : null}
+                defaultToDate={activeTab === 'History' ? getMonthRange().toDate : null}
+                showDateFilter={true}
+                showLeaveTypeFilter={false}
+                showStatusFilter={activeTab === 'History'}
+            />
+
             {loading && !refreshing ? (
                 <View style={styles.loaderContainer}>
                     <ActivityIndicator size="large" color={COLORS.blue} />
@@ -130,6 +178,10 @@ const CompOffHistoryScreen = ({ navigation }) => {
                     ListEmptyComponent={renderEmpty}
                     showsVerticalScrollIndicator={false}
                     onEndReachedThreshold={0.5}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                     }
