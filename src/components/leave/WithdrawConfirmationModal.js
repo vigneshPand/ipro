@@ -3,12 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import AppModal from '../common/AppModal';
 import { COLORS } from '../../utils/theme';
 
-const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading }) => {
+const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading, isRegularize }) => {
     const [remarks, setRemarks] = useState('');
     const [error, setError] = useState('');
 
     const handleConfirm = () => {
-        if (!remarks.trim()) {
+        if (!isRegularize && !remarks.trim()) {
             setError('Remarks are required');
             return;
         }
@@ -37,21 +37,22 @@ const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading }) =
                 <Text style={styles.messageText}>
                     Are you sure you want to withdraw this request?
                 </Text>
-
-                <TextInput
-                    style={[styles.input, error ? styles.inputError : null]}
-                    placeholder="Enter remarks"
-                    placeholderTextColor="#9ca3af"
-                    multiline
-                    numberOfLines={4}
-                    value={remarks}
-                    onChangeText={(text) => {
-                        setRemarks(text);
-                        if (error) setError('');
-                    }}
-                    editable={!isLoading}
-                />
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {!isRegularize && (
+                    <TextInput
+                        style={[styles.input, error ? styles.inputError : null]}
+                        placeholder="Enter remarks"
+                        placeholderTextColor="#9ca3af"
+                        multiline
+                        numberOfLines={4}
+                        value={remarks}
+                        onChangeText={(text) => {
+                            setRemarks(text);
+                            if (error) setError('');
+                        }}
+                        editable={!isLoading}
+                    />
+                )}
+                {isRegularize ? null : error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                 {/* Footer Buttons */}
                 <View style={styles.footer}>

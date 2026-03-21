@@ -1,19 +1,29 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    FlatList,
+    ActivityIndicator,
+    RefreshControl,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
-import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
-import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
 import { COLORS } from '../../utils/theme';
-import useWFHStore from '../../store/useWFHStore';
-import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
 import useHistoryFilters from '../../hooks/useHistoryFilters';
 import HistoryFilters from '../../components/historyFilters/HistoryFilters';
+import useRegularizationHistoryStore from '../../store/useRegularizationHistoryStore';
+import RegularizationListCard, {
+    RegularizationHistoryCard,
+} from '../../components/regularization/RegularizationListCard';
+import RegularizationDetailsModal from '../../components/regularization/RegularizationDetailsModal';
 
-// Helper: get current month date range (YYYY-MM-DD)
+// ─── Helper ────────────────────────────────────────────────────────────────────
+
 const getMonthRange = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -24,17 +34,30 @@ const getMonthRange = () => {
     return { fromDate: firstDay, toDate: lastDay };
 };
 
-const WFHHistoryScreen = ({ navigation }) => {
+// ─── Screen ────────────────────────────────────────────────────────────────────
+
+const RegularizationHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
-    const [modalVisible, setModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
 
     const {
-        pendingList, loadingPending, fetchPendingWFH, fetchNextPendingPage,
-        historyList, loadingHistory, fetchWFHHistory, fetchNextHistoryPage,
-    } = useWFHStore();
-
-    const { fetchLeaveDetails } = useLeaveStore();
+        // lists
+        pendingList,
+        loadingPending,
+        fetchPendingList,
+        fetchNextPendingPage,
+        historyList,
+        loadingHistory,
+        fetchHistoryList,
+        fetchNextHistoryPage,
+        // details
+        selectedItem,
+        fetchDetails,
+        // helpers
+        setSelectedItem,
+        resetForTabSwitch,
+    } = useRegularizationHistoryStore();
 
     const {
         filters,
@@ -42,7 +65,7 @@ const WFHHistoryScreen = ({ navigation }) => {
         buildQueryParams,
     } = useHistoryFilters();
 
-    // Unified fetch that uses filter state
+    // ── Fetch data based on active tab + filters ─────────────────────────────
     const fetchData = useCallback(async () => {
         try {
             const user = await AuthService.getUserInfo();
@@ -52,7 +75,7 @@ const WFHHistoryScreen = ({ navigation }) => {
             const { userId, year, pageNo, sortBy, direction, keyword, ...extraParams } = params;
 
             if (activeTab === 'Pending') {
-                await fetchPendingWFH(user.userId, new Date().getFullYear(), 0, extraParams);
+                await fetchPendingList(user.userId, new Date().getFullYear(), 0, extraParams);
             } else {
                 const finalFromDate = extraParams.fromDate;
                 const finalToDate = extraParams.toDate;
@@ -62,14 +85,20 @@ const WFHHistoryScreen = ({ navigation }) => {
                 const fDate = finalFromDate || defaultRange.fromDate;
                 const tDate = finalToDate || defaultRange.toDate;
 
-                await fetchWFHHistory(user.userId, new Date().getFullYear(), fDate, tDate, 0, historyExtraParams);
+                await fetchHistoryList(
+                    user.userId,
+                    new Date().getFullYear(),
+                    fDate,
+                    tDate,
+                    0,
+                    historyExtraParams,
+                );
             }
         } catch (err) {
-            console.error(err);
+            console.error('RegularizationHistory fetchData error:', err);
         }
-    }, [activeTab, buildQueryParams, fetchPendingWFH, fetchWFHHistory]);
+    }, [activeTab, buildQueryParams, fetchPendingList, fetchHistoryList]);
 
-    // Fetch on mount and whenever filters or tab change
     useFocusEffect(
         useCallback(() => {
             fetchData();
@@ -77,9 +106,11 @@ const WFHHistoryScreen = ({ navigation }) => {
         }, [fetchData, filters])
     );
 
+    // ── Tab switch ────────────────────────────────────────────────────────────
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
+        resetForTabSwitch();
         if (tab === 'History') {
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
@@ -88,17 +119,21 @@ const WFHHistoryScreen = ({ navigation }) => {
         }
     };
 
+    // ── Pull-to-refresh ───────────────────────────────────────────────────────
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await fetchData();
         setRefreshing(false);
     }, [fetchData]);
 
-    const handleCardPress = (leave) => {
+    // ── Card press → fetch details ────────────────────────────────────────────
+    const handleCardPress = useCallback((item) => {
+        setSelectedItem(item);
+        fetchDetails(item.requestId);
         setModalVisible(true);
-        fetchLeaveDetails(leave.id, leave.startDate, leave.endDate);
-    };
+    }, [setSelectedItem, fetchDetails]);
 
+    // ── Pagination ────────────────────────────────────────────────────────────
     const handleEndReached = useCallback(async () => {
         try {
             const user = await AuthService.getUserInfo();
@@ -118,49 +153,94 @@ const WFHHistoryScreen = ({ navigation }) => {
                 const fDate = finalFromDate || defaultRange.fromDate;
                 const tDate = finalToDate || defaultRange.toDate;
 
-                await fetchNextHistoryPage(user.userId, new Date().getFullYear(), fDate, tDate, historyExtraParams);
+                await fetchNextHistoryPage(
+                    user.userId,
+                    new Date().getFullYear(),
+                    fDate,
+                    tDate,
+                    historyExtraParams,
+                );
             }
         } catch (err) {
-            console.error(err);
+            console.error('RegularizationHistory endReached error:', err);
         }
     }, [activeTab, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage]);
 
-    const renderEmpty = () => (
+    // ── Withdraw success callback ──────────────────────────────────────────────
+    const handleWithdrawSuccess = useCallback(async () => {
+        try {
+            const user = await AuthService.getUserInfo();
+            if (user?.userId) {
+                resetForTabSwitch();
+                await fetchPendingList(user.userId, new Date().getFullYear(), 0);
+            }
+        } catch (err) {
+            console.error('RegularizationHistory withdraw refresh error:', err);
+        }
+    }, [fetchPendingList, resetForTabSwitch]);
+
+    // ── Empty state ───────────────────────────────────────────────────────────
+    const renderEmpty = useCallback(() => (
         <View style={styles.emptyContainer}>
             <Icon name="folder-open-outline" size={48} color="#d1d5db" />
-            <Text style={styles.emptyText}>No WFH records found</Text>
+            <Text style={styles.emptyText}>No regularization records found</Text>
         </View>
-    );
+    ), []);
+
+    // ── List renderers ────────────────────────────────────────────────────────
+    const renderPendingItem = useCallback(({ item }) => (
+        <RegularizationListCard
+            item={item}
+            onPress={handleCardPress}
+            isSelected={selectedItem?.requestId === item.requestId}
+        />
+    ), [handleCardPress, selectedItem]);
+
+    const renderHistoryItem = useCallback(({ item }) => (
+        <RegularizationHistoryCard
+            item={item}
+            onPress={handleCardPress}
+            isSelected={selectedItem?.requestId === item.requestId}
+        />
+    ), [handleCardPress, selectedItem]);
+
+    const isLoadingActive = activeTab === 'Pending' ? loadingPending : loadingHistory;
+    const listData = activeTab === 'Pending' ? pendingList : historyList;
+    const renderItem = activeTab === 'Pending' ? renderPendingItem : renderHistoryItem;
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
+
+            {/* ── Header ── */}
             <View style={styles.headerRow}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.backBtn}>
                     <Icon name="menu" size={24} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerText}>WFH History</Text>
+                <Text style={styles.headerText}>Regularization</Text>
                 <View style={styles.headerSpacer} />
             </View>
 
-            {/* Tabs */}
+            {/* ── Tabs ── */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
                     style={[styles.tabButton, activeTab === 'Pending' && styles.activeTab]}
                     onPress={() => handleTabChange('Pending')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'Pending' && styles.activeTabText]}>Pending</Text>
+                    <Text style={[styles.tabText, activeTab === 'Pending' && styles.activeTabText]}>
+                        Pending
+                    </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                     style={[styles.tabButton, activeTab === 'History' && styles.activeTab]}
                     onPress={() => handleTabChange('History')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>History</Text>
+                    <Text style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>
+                        History
+                    </Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Filter Bar */}
+            {/* ── Filters ── */}
             <HistoryFilters
                 filters={filters}
                 onFilterChange={updateFilters}
@@ -179,27 +259,19 @@ const WFHHistoryScreen = ({ navigation }) => {
                 showStatusFilter={activeTab === 'History'}
             />
 
-            {/* Tab Content */}
-            {activeTab === 'Pending' ? (
-                loadingPending && !refreshing ? (
+            {/* ── List Body ── */}
+            <View style={styles.listContainer}>
+                {isLoadingActive && !refreshing ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
                 ) : (
                     <FlatList
-                        data={pendingList}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-                        renderItem={({ item }) => (
-                            <PendingLeaveCard
-                                type={item.type}
-                                days={item.noOfDays}
-                                status={item.status}
-                                pendingWith={item.pendingWith || item.assignToName}
-                                startDate={item.startDate}
-                                endDate={item.endDate}
-                                onPress={() => handleCardPress(item)}
-                            />
-                        )}
+                        data={listData}
+                        keyExtractor={(item) =>
+                            item.requestId?.toString() || Math.random().toString()
+                        }
+                        renderItem={renderItem}
                         contentContainerStyle={styles.listContent}
                         ListEmptyComponent={renderEmpty}
                         showsVerticalScrollIndicator={false}
@@ -208,68 +280,40 @@ const WFHHistoryScreen = ({ navigation }) => {
                         initialNumToRender={10}
                         maxToRenderPerBatch={10}
                         windowSize={5}
+                        removeClippedSubviews={true}
                         refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
-                        }
-                    />
-                )
-            ) : (
-                loadingHistory && !refreshing ? (
-                    <View style={styles.loaderContainer}>
-                        <ActivityIndicator size="large" color={COLORS.blue} />
-                    </View>
-                ) : (
-                    <FlatList
-                        data={historyList}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-                        renderItem={({ item }) => (
-                            <HistoryLeaveCard
-                                item={item}
-                                onPress={handleCardPress}
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
+                                colors={[COLORS.blue]}
+                                tintColor={COLORS.blue}
                             />
-                        )}
-                        contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
-                        showsVerticalScrollIndicator={false}
-                        onEndReachedThreshold={0.5}
-                        onEndReached={handleEndReached}
-                        initialNumToRender={10}
-                        maxToRenderPerBatch={10}
-                        windowSize={5}
-                        refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
                     />
-                )
-            )}
+                )}
+            </View>
 
-            {/* Details Modal (shared between Pending & History) */}
-            <LeaveHistoryDetailsModal
+            {/* ── Details Modal ── */}
+            <RegularizationDetailsModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 showWithdraw={activeTab === 'Pending'}
-                isWFH={true}
-                onWithdrawSuccess={async () => {
-                    try {
-                        const user = await AuthService.getUserInfo();
-                        if (user?.userId) {
-                            await fetchPendingWFH(user.userId, new Date().getFullYear());
-                        }
-                    } catch (err) {
-                        console.error('WFH refresh error', err);
-                    }
-                }}
+                onWithdrawSuccess={handleWithdrawSuccess}
             />
 
         </SafeAreaView>
     );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.bg,
     },
+
+    // Header
     headerRow: {
         backgroundColor: COLORS.blue,
         flexDirection: 'row',
@@ -287,7 +331,10 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         letterSpacing: 0.5,
+        flex: 1,
     },
+
+    // Tabs
     tabContainer: {
         flexDirection: 'row',
         backgroundColor: '#fff',
@@ -317,11 +364,19 @@ const styles = StyleSheet.create({
     activeTabText: {
         color: COLORS.blue,
     },
+
+    // List Container
+    listContainer: {
+        flex: 1,
+        backgroundColor: '#f9fafb',
+    },
     listContent: {
         padding: 16,
         paddingBottom: 40,
         flexGrow: 1,
     },
+
+    // Empty / Loader
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -330,8 +385,9 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         marginTop: 12,
-        fontSize: 15,
+        fontSize: 13,
         color: COLORS.grayText,
+        textAlign: 'center',
     },
     loaderContainer: {
         flex: 1,
@@ -340,4 +396,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default WFHHistoryScreen;
+export default RegularizationHistoryScreen;

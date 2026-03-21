@@ -74,7 +74,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                         await fetchPendingLeaves(user.userId, new Date().getFullYear());
                     }
                 } catch (err) {
-                    console.error('Refresh error', err);
+                    // console.error('Refresh error', err);
                 }
             }
         } else {

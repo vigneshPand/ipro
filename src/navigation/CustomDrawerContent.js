@@ -35,8 +35,11 @@ const CustomDrawerContent = (props) => {
     ].includes(activeRoute);
 
     const isAttendanceSubMenu = [
+        'Attendance Grid',
+        // 'Regularization',
         'WFHRequest',
-        'WFHHistory'
+        'WFHHistory',
+        'RegularizationHistory',
     ].includes(activeRoute);
 
     const isParentActive = (submenu, expanded) => submenu && !expanded;
@@ -176,6 +179,55 @@ const CustomDrawerContent = (props) => {
                         <TouchableOpacity
                             style={[
                                 styles.subMenuItem,
+                                activeRoute === 'Attendance Grid' && styles.activeSubMenuItem
+                            ]}
+                            onPress={() => navigateTo('Attendance Grid')}
+                        >
+                            <Text
+                                style={[
+                                    styles.subMenuText,
+                                    activeRoute === 'Attendance Grid' && styles.activeMenuText
+                                ]}
+                            >
+                                Attendance Grid
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* <TouchableOpacity
+                            style={[
+                                styles.subMenuItem,
+                                activeRoute === 'Regularization' && styles.activeSubMenuItem
+                            ]}
+                            onPress={() => navigateTo('Regularization')}
+                        >
+                            <Text
+                                style={[
+                                    styles.subMenuText,
+                                    activeRoute === 'Regularization' && styles.activeMenuText
+                                ]}
+                            >
+                                Regularization
+                            </Text>
+                        </TouchableOpacity> */}
+                        <TouchableOpacity
+                            style={[
+                                styles.subMenuItem,
+                                activeRoute === 'Regularization' && styles.activeSubMenuItem
+                            ]}
+                            onPress={() => navigateTo('Regularization')}
+                        >
+                            <Text
+                                style={[
+                                    styles.subMenuText,
+                                    activeRoute === 'Regularization' && styles.activeMenuText
+                                ]}
+                            >
+                                Regularization
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.subMenuItem,
                                 activeRoute === 'WFHRequest' && styles.activeSubMenuItem
                             ]}
                             onPress={() => navigateTo('WFHRequest')}
@@ -250,42 +302,44 @@ const CustomDrawerContent = (props) => {
                     />
                 </TouchableOpacity>
 
-                {isLeaveExpanded && (
-                    <View style={styles.subMenuContainer}>
+                {
+                    isLeaveExpanded && (
+                        <View style={styles.subMenuContainer}>
 
-                        {[
-                            { name: 'Holidays', route: 'Holidays' },
-                            { name: 'Leave Request', route: 'LeaveRequest' },
-                            { name: 'Leave History', route: 'LeaveHistory' },
-                            { name: 'Comp-Off Grant Request', route: 'CompOffGrantRequest' },
-                            { name: 'Comp-Off History', route: 'CompOffHistory' },
-                        ].map(item => (
-                            <TouchableOpacity
-                                key={item.route}
-                                style={[
-                                    styles.subMenuItem,
-                                    activeRoute === item.route && styles.activeSubMenuItem
-                                ]}
-                                onPress={() => navigateTo(item.route)}
-                            >
-                                <Text
+                            {[
+                                { name: 'Holidays', route: 'Holidays' },
+                                { name: 'Leave Request', route: 'LeaveRequest' },
+                                { name: 'Leave History', route: 'LeaveHistory' },
+                                { name: 'Comp-Off Grant Request', route: 'CompOffGrantRequest' },
+                                { name: 'Comp-Off History', route: 'CompOffHistory' },
+                            ].map(item => (
+                                <TouchableOpacity
+                                    key={item.route}
                                     style={[
-                                        styles.subMenuText,
-                                        activeRoute === item.route && styles.activeMenuText
+                                        styles.subMenuItem,
+                                        activeRoute === item.route && styles.activeSubMenuItem
                                     ]}
+                                    onPress={() => navigateTo(item.route)}
                                 >
-                                    {item.name}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === item.route && styles.activeMenuText
+                                        ]}
+                                    >
+                                        {item.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
 
-                    </View>
-                )}
+                        </View>
+                    )
+                }
 
-            </DrawerContentScrollView>
+            </DrawerContentScrollView >
 
             {/* FOOTER */}
-            <View style={{ paddingBottom: insets.bottom || 15 }}>
+            < View style={{ paddingBottom: insets.bottom || 15 }}>
 
                 <View style={styles.logoutContainer}>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -294,33 +348,35 @@ const CustomDrawerContent = (props) => {
                     </TouchableOpacity>
                 </View>
 
-                {(userProfile?.displayName || userProfile?.empId) && (
-                    <View style={styles.footer}>
-                        <View style={styles.avatarContainer}>
-                            {userProfile?.profile ? (
-                                <Image
-                                    source={{ uri: `data:image/jpeg;base64,${userProfile.profile}` }}
-                                    style={styles.managerImage}
-                                />
-                            ) : (
-                                <View style={styles.placeholderAvatar}>
-                                    <Icon name="account" size={30} color="#fff" />
-                                </View>
-                            )}
-                        </View>
+                {
+                    (userProfile?.displayName || userProfile?.empId) && (
+                        <View style={styles.footer}>
+                            <View style={styles.avatarContainer}>
+                                {userProfile?.profile ? (
+                                    <Image
+                                        source={{ uri: `data:image/jpeg;base64,${userProfile.profile}` }}
+                                        style={styles.managerImage}
+                                    />
+                                ) : (
+                                    <View style={styles.placeholderAvatar}>
+                                        <Icon name="account" size={30} color="#fff" />
+                                    </View>
+                                )}
+                            </View>
 
-                        <View style={styles.profileInfo}>
-                            <Text style={styles.profileName}>{userProfile?.displayName}</Text>
-                            <Text style={styles.profileId}>{userProfile?.empId}</Text>
+                            <View style={styles.profileInfo}>
+                                <Text style={styles.profileName}>{userProfile?.displayName}</Text>
+                                <Text style={styles.profileId}>{userProfile?.empId}</Text>
+                            </View>
                         </View>
-                    </View>
-                )}
+                    )
+                }
 
-            </View>
+            </View >
 
             <LoadingOverlay {...overlay} />
 
-        </View>
+        </View >
     );
 };
 

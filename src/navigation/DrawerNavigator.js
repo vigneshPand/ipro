@@ -9,6 +9,8 @@ import HolidayScreen from '../screens/holiday/HolidayScreen';
 import CompOffGrantScreen from '../screens/leave/comp-off/CompOffGrantScreen';
 import WFHRequestScreen from '../screens/wfh/WFHRequest';
 import WFHHistoryScreen from '../screens/wfh/WFHHistory';
+import AttendanceGridScreen from '../screens/attendance/AttendanceGrid';
+import RegularizationHistoryScreen from '../screens/regularization/RegularizationHistoryScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -34,6 +36,7 @@ const DrawerNavigator = ({ route }) => {
             />
 
             {/* Sub-menu hidden screens */}
+            <Drawer.Screen name="Attendance Grid" component={AttendanceGridScreen} />
             <Drawer.Screen name="Holidays" component={HolidayScreen} />
             <Drawer.Screen name="LeaveRequest" component={LeaveRequestScreen} />
             <Drawer.Screen name="LeaveHistory" component={LeaveHistoryScreen} />
@@ -41,6 +44,7 @@ const DrawerNavigator = ({ route }) => {
             <Drawer.Screen name="WFHHistory" component={WFHHistoryScreen} />
             <Drawer.Screen name="CompOffGrantRequest" component={CompOffGrantScreen} />
             <Drawer.Screen name="CompOffHistory" component={CompOffHistoryScreen} />
+            <Drawer.Screen name="Regularization" component={RegularizationHistoryScreen} />
         </Drawer.Navigator>
     );
 };

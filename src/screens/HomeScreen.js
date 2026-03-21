@@ -343,9 +343,9 @@ const HomeScreen = ({ route, navigation }) => {
                                             size={14}
                                             color="#666"
                                         />
-                                        <Text style={styles.activityLocationText}>
+                                        {/* <Text style={styles.activityLocationText}>
                                             {item.workMode} • {item.location}
-                                        </Text>
+                                        </Text> */}
                                     </View>
                                 </View>
                             </View>

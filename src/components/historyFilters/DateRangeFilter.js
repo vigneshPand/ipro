@@ -29,62 +29,77 @@ const toYMD = (d) => {
 
 const DateRangeFilter = ({ fromDate, toDate, onChange, onClear, defaultFromDate = null, defaultToDate = null }) => {
     const [visible, setVisible] = useState(false);
-    const [step, setStep] = useState('start'); // 'start' | 'end'
+    const [selectionMode, setSelectionMode] = useState('from'); // 'from' | 'to'
     const [tempStart, setTempStart] = useState(new Date());
     const [tempEnd, setTempEnd] = useState(new Date());
-    // Android inline picker controls
-    const [showAndroidPicker, setShowAndroidPicker] = useState(false);
+    // Android/iOS picker controls
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const hasFilter = (fromDate && fromDate !== defaultFromDate) || (toDate && toDate !== defaultToDate);
 
     const openPicker = useCallback(() => {
-        // Initialise temp dates
+        // Initialize temp dates from props or defaults
         setTempStart(fromDate ? new Date(fromDate + 'T00:00:00') : new Date());
         setTempEnd(toDate ? new Date(toDate + 'T00:00:00') : new Date());
-        setStep('start');
+        setSelectionMode('from');
         setVisible(true);
-        if (Platform.OS === 'android') {
-            setShowAndroidPicker(true);
-        }
+        setShowDatePicker(true);
     }, [fromDate, toDate]);
 
     /* ----------  iOS: inline pickers inside modal ---------- */
     const handleIOSConfirm = () => {
-        if (step === 'start') {
-            setStep('end');
+        if (selectionMode === 'from') {
             // If end date is before new start, reset it
             if (tempEnd < tempStart) setTempEnd(tempStart);
+            // Close and reopen to ensure picker switches to To Date properly
+            setShowDatePicker(false);
+            setSelectionMode('to');
+            // Delay reopening to allow state to settle
+            setTimeout(() => {
+                setShowDatePicker(true);
+            }, 100);
         } else {
             const from = toYMD(tempStart);
             const to = toYMD(tempEnd < tempStart ? tempStart : tempEnd);
             onChange({ fromDate: from, toDate: to });
+            setShowDatePicker(false);
             setVisible(false);
+            setSelectionMode('from'); // Reset for next use
         }
     };
 
+    const handleCancel = useCallback(() => {
+        setShowDatePicker(false);
+        setVisible(false);
+        setSelectionMode('from');
+    }, []);
+
     /* ----------  Android: sequential native dialogs ---------- */
-    const handleAndroidChange = (event, selectedDate) => {
-        if (event.type === 'dismissed') {
-            setShowAndroidPicker(false);
-            setVisible(false);
+    const handleDateSelect = (event, selectedDate) => {
+        if (event?.type === 'dismissed' || !selectedDate) {
+            handleCancel();
             return;
         }
-        if (step === 'start') {
-            const picked = selectedDate || tempStart;
-            setTempStart(picked);
-            setStep('end');
-            // tempEnd will be picked next
-            setTempEnd(picked); // default end = start
-            // Keep showAndroidPicker true so the second picker shows
+
+        if (selectionMode === 'from') {
+            setTempStart(selectedDate);
+            setTempEnd(selectedDate); // Default end date = start date
+            // Close picker first to allow native component to fully dismiss
+            setShowDatePicker(false);
+            setSelectionMode('to');
+            // Delay reopening picker to avoid race condition with native component
+            setTimeout(() => {
+                setShowDatePicker(true);
+            }, 250);
         } else {
-            setShowAndroidPicker(false);
-            const endPicked = selectedDate || tempEnd;
-            const finalEnd = endPicked < tempStart ? tempStart : endPicked;
+            const finalEnd = selectedDate < tempStart ? tempStart : selectedDate;
             setTempEnd(finalEnd);
             const from = toYMD(tempStart);
             const to = toYMD(finalEnd);
             onChange({ fromDate: from, toDate: to });
+            setShowDatePicker(false);
             setVisible(false);
+            setSelectionMode('from'); // Reset for next use
         }
     };
 
@@ -124,12 +139,13 @@ const DateRangeFilter = ({ fromDate, toDate, onChange, onClear, defaultFromDate 
             </TouchableOpacity>
 
             {/* ---------- Android native date pickers ---------- */}
-            {Platform.OS === 'android' && visible && showAndroidPicker && (
+            {Platform.OS === 'android' && visible && showDatePicker && (
                 <DateTimePicker
-                    value={step === 'start' ? tempStart : tempEnd}
+                    key={`android-picker-${selectionMode}`}
+                    value={selectionMode === 'from' ? tempStart : tempEnd}
                     mode="date"
                     display="default"
-                    onChange={handleAndroidChange}
+                    onChange={handleDateSelect}
                 />
             )}
 
@@ -139,39 +155,40 @@ const DateRangeFilter = ({ fromDate, toDate, onChange, onClear, defaultFromDate 
                     visible={visible}
                     transparent
                     animationType="fade"
-                    onRequestClose={() => setVisible(false)}
+                    onRequestClose={handleCancel}
                 >
                     <Pressable
                         style={styles.backdrop}
-                        onPress={() => setVisible(false)}
+                        onPress={handleCancel}
                     >
                         <Pressable style={styles.modalContent}>
                             <Text style={styles.modalTitle}>
-                                {step === 'start'
+                                {selectionMode === 'from'
                                     ? 'Select Start Date'
                                     : 'Select End Date'}
                             </Text>
 
                             <DateTimePicker
-                                value={step === 'start' ? tempStart : tempEnd}
+                                key={`date-picker-${selectionMode}`}
+                                value={selectionMode === 'from' ? tempStart : tempEnd}
                                 mode="date"
                                 display="inline"
                                 onChange={(_, date) => {
                                     if (date) {
-                                        step === 'start'
+                                        selectionMode === 'from'
                                             ? setTempStart(date)
                                             : setTempEnd(date);
                                     }
                                 }}
                                 minimumDate={
-                                    step === 'end' ? tempStart : undefined
+                                    selectionMode === 'to' ? tempStart : undefined
                                 }
                                 style={styles.dateTimePicker}
                             />
 
                             <View style={styles.modalActions}>
                                 <TouchableOpacity
-                                    onPress={() => setVisible(false)}
+                                    onPress={handleCancel}
                                     style={styles.cancelBtn}
                                 >
                                     <Text style={styles.cancelText}>
@@ -183,7 +200,7 @@ const DateRangeFilter = ({ fromDate, toDate, onChange, onClear, defaultFromDate 
                                     style={styles.confirmBtn}
                                 >
                                     <Text style={styles.confirmText}>
-                                        {step === 'start'
+                                        {selectionMode === 'from'
                                             ? 'Next'
                                             : 'Confirm'}
                                     </Text>
