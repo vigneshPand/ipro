@@ -3,7 +3,7 @@ import { View, Text, Image, StyleSheet, TextInput, TouchableOpacity, ScrollView 
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 
-const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC }) => {
+const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hideCCField = false }) => {
     const [ccSearch, setCCSearch] = useState("");
     const [showCCDropdown, setShowCCDropdown] = useState(false);
 
@@ -27,54 +27,58 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC }) =>
 
     return (
         <View style={styles.reportsToSection}>
-            <View style={styles.reportsToHeader}>
-                <Text style={styles.label}>Reports to</Text>
-                <View style={styles.searchContainer}>
-                    <TextInput
-                        placeholder="Search CC member"
-                        placeholderTextColor="#9ca3af"
-                        value={ccSearch}
-                        onFocus={() => setShowCCDropdown(true)}
-                        onChangeText={(text) => {
-                            setCCSearch(text);
-                            setShowCCDropdown(true);
-                        }}
-                        style={styles.ccSearchInput}
-                    />
-                    {showCCDropdown && ccSearch.trim().length > 0 && (
-                        <View style={styles.dropdownList}>
-                            <ScrollView nestedScrollEnabled={true}>
-                                {filteredCC.length > 0 ? (
-                                    filteredCC.map(user => (
-                                        <TouchableOpacity
-                                            key={user.userId}
-                                            style={styles.dropdownItem}
-                                            onPress={() => handleSelectCC(user)}
-                                        >
-                                            <Text style={styles.dropdownItemText}>{user.name}</Text>
-                                        </TouchableOpacity>
-                                    ))
-                                ) : (
-                                    <View style={styles.dropdownItem}>
-                                        <Text style={styles.dropdownItemText}>No members found</Text>
-                                    </View>
-                                )}
-                            </ScrollView>
+            {!hideCCField && (
+                <>
+                    <View style={styles.reportsToHeader}>
+                        <Text style={styles.label}>Reports to</Text>
+                        <View style={styles.searchContainer}>
+                            <TextInput
+                                placeholder="Search CC member"
+                                placeholderTextColor="#9ca3af"
+                                value={ccSearch}
+                                onFocus={() => setShowCCDropdown(true)}
+                                onChangeText={(text) => {
+                                    setCCSearch(text);
+                                    setShowCCDropdown(true);
+                                }}
+                                style={styles.ccSearchInput}
+                            />
+                            {showCCDropdown && ccSearch.trim().length > 0 && (
+                                <View style={styles.dropdownList}>
+                                    <ScrollView nestedScrollEnabled={true}>
+                                        {filteredCC.length > 0 ? (
+                                            filteredCC.map(user => (
+                                                <TouchableOpacity
+                                                    key={user.userId}
+                                                    style={styles.dropdownItem}
+                                                    onPress={() => handleSelectCC(user)}
+                                                >
+                                                    <Text style={styles.dropdownItemText}>{user.name}</Text>
+                                                </TouchableOpacity>
+                                            ))
+                                        ) : (
+                                            <View style={styles.dropdownItem}>
+                                                <Text style={styles.dropdownItemText}>No members found</Text>
+                                            </View>
+                                        )}
+                                    </ScrollView>
+                                </View>
+                            )}
                         </View>
-                    )}
-                </View>
-            </View>
-
-            <View style={styles.ccChipContainer}>
-                {selectedCC.map(user => (
-                    <View key={user.userId} style={styles.ccChip}>
-                        <Text style={styles.ccChipText}>{user.name}</Text>
-                        <TouchableOpacity onPress={() => removeCC(user.userId)} style={styles.removeIcon}>
-                            <Icon name="close" size={14} color="#6b7280" />
-                        </TouchableOpacity>
                     </View>
-                ))}
-            </View>
+
+                    <View style={styles.ccChipContainer}>
+                        {selectedCC.map(user => (
+                            <View key={user.userId} style={styles.ccChip}>
+                                <Text style={styles.ccChipText}>{user.name}</Text>
+                                <TouchableOpacity onPress={() => removeCC(user.userId)} style={styles.removeIcon}>
+                                    <Icon name="close" size={14} color="#6b7280" />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </View>
+                </>
+            )}
 
             <View style={styles.managerProfileRow}>
                 {managerInfo.profile ? (

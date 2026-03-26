@@ -7,14 +7,34 @@ const useLeaveRequestStore = create((set) => ({
 
     submitLeaveRequest: async (payload) => {
         set({ isSubmitting: true, submitError: null });
+
         try {
-            const response = await apiClient.post('/leave/leaveRequest', null, {
-                params: payload,
-            });
-            set({ isSubmitting: false });
-            return response.data;
+            // extract file data (large)
+            const { fileData, ...rest } = payload;
+
+            const response = await apiClient.post(
+                '/leave/leaveRequest',
+                {
+                    fileData,
+                },
+                {
+                    params: {
+                        ...rest,
+                        leaveDates: JSON.stringify(rest.leaveDates),
+                    },
+                    maxBodyLength: Infinity,
+                    maxContentLength: Infinity,
+                }
+            );
+
+            set({ isSubmitting: false })
+            return response;
+
         } catch (error) {
-            const message = error?.response?.data?.message || 'Leave request failed';
+            const message =
+                error?.response?.data?.message ||
+                'Leave request failed';
+
             set({ isSubmitting: false, submitError: message });
             throw error;
         }

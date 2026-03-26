@@ -1,5 +1,6 @@
 import React from 'react';
 import CommonHistoryCard from '../common/HistoryCard';
+import { formatMinutesToTime } from '../../utils/dateUtils';
 
 const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -8,15 +9,17 @@ const formatDate = (dateStr) => {
 };
 
 const PendingLeaveCard = ({ type, days, status, pendingWith, startDate, endDate, onPress }) => {
+    const isPermission = type === 'Permission';
+
     return (
         <CommonHistoryCard
             title={type}
             status={status}
             onPress={onPress}
             details={[
-                { label: 'Start Date:', value: formatDate(startDate) },
-                { label: 'End Date:', value: formatDate(endDate) },
-                { label: 'No of Days:', value: days },
+                { label: isPermission ? 'Date:' : 'Start Date:', value: formatDate(startDate) },
+                ...(isPermission ? [] : [{ label: 'End Date:', value: formatDate(endDate) }]),
+                { label: isPermission ? 'No of Hours:' : 'No of Days:', value: isPermission ? formatMinutesToTime(days * 60) : days },
                 { label: 'Pending With:', value: pendingWith }
             ]}
         />

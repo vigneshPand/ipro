@@ -13,10 +13,10 @@ import useLeaveStore from '../../store/useLeaveStore';
 import { COLORS } from '../../utils/theme';
 import LoadingOverlay from '../../components/LoadingOverlay';
 
-import { formatToAPI, parseAPIDate, formatDate, formatPermissionTime, convertTimeToMinutes } from '../../utils/dateUtils';
+import { formatToAPI, parseAPIDate, formatDate, formatPermissionTime, convertTimeToMinutes, formatMinutesToTime } from '../../utils/dateUtils';
 
 const LeaveApplyScreen = ({ navigation, route }) => {
-    const { leaveType, balance } = route.params;
+    const { leaveType, balance, isWFHCheckInFlow = false, onWFHApplySuccess = null } = route.params;
 
     // Date state
     const [fromDate, setFromDate] = useState(null);
@@ -115,6 +115,16 @@ const LeaveApplyScreen = ({ navigation, route }) => {
         loadNameList();
         loadManagerInfo();
     }, []);
+
+    // ─── Auto-set dates for WFH Check-In Flow ───
+    useEffect(() => {
+        if (isWFHCheckInFlow) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            setFromDate(today);
+            setToDate(today);
+        }
+    }, [isWFHCheckInFlow]);
 
     // ─── Fetch Bereavement Types ───
     useEffect(() => {
@@ -411,7 +421,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                     reason: reason.trim(),
                     type: leaveType,
                     userId,
-                    leaveDates: JSON.stringify(leaveDatesPayload),
+                    leaveDates: leaveDatesPayload,
                 };
 
                 if (leaveType === 'Bereavement Leave' && selectedBereavementType) {
@@ -439,11 +449,11 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                 // }
 
                 if (selectedCC.length > 0) {
-                    payload.cc = selectedCC.map(item => item.email);
+                    payload.cc = selectedCC.map(item => item.email).join(',');
                 }
 
                 const response = await submitLeaveRequest(payload);
-                successMsg = response?.message || response?.data?.message || 'Leave request submitted successfully';
+                successMsg = response?.message || response?.data
             }
 
             // Refresh leave balances so LeaveRequest screen updates immediately
@@ -452,6 +462,13 @@ const LeaveApplyScreen = ({ navigation, route }) => {
 
             showSuccess(successMsg, () => {
                 navigation.goBack();
+                // If coming from WFH check-in flow, trigger auto check-in on HomeScreen
+                if (isWFHCheckInFlow && onWFHApplySuccess) {
+                    // Small delay to let navigation settle before triggering check-in
+                    setTimeout(() => {
+                        onWFHApplySuccess();
+                    }, 500);
+                }
             });
         } catch (error) {
             if (leaveType === 'Permission') {
@@ -504,7 +521,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                             {leaveType !== 'Bereavement Leave' && leaveType !== 'Loss Of Pay' && leaveType !== 'Work From Home' && (
                                 <Text style={styles.infoText}> Balance: <Text style={styles.infoTextBold}>
                                     {leaveType === 'Permission'
-                                        ? (balance ? String(balance).replace(/hrs/i, '').trim() + ' hrs' : '0 hrs')
+                                        ? (balance ? formatMinutesToTime(balance) : '0:00hrs')
                                         : (balance ?? 0)}
                                 </Text></Text>
                             )}
@@ -638,7 +655,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                         onDateChange={handleFromDateChange}
                                         minimumDate={new Date()}
                                         formatDate={formatDate}
-                                        disabled={isDateDisabled}
+                                        disabled={isDateDisabled || isWFHCheckInFlow}
                                     />
                                     <DatePickerField
                                         label="To"
@@ -646,7 +663,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                         onDateChange={handleToDateChange}
                                         minimumDate={fromDate || new Date()}
                                         formatDate={formatDate}
-                                        disabled={isDateDisabled}
+                                        disabled={isDateDisabled || isWFHCheckInFlow}
                                     />
                                 </View>
 
@@ -703,6 +720,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                             ccList={[...ccList, ...nameList].filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i)}
                             selectedCC={selectedCC}
                             setSelectedCC={setSelectedCC}
+                            hideCCField={isWFHCheckInFlow}
                         />
 
                         {/* Reason Section */}

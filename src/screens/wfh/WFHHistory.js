@@ -225,7 +225,7 @@ const WFHHistoryScreen = ({ navigation }) => {
                         renderItem={({ item }) => (
                             <HistoryLeaveCard
                                 item={item}
-                                onPress={handleCardPress}
+                                onPress={() => handleCardPress(item)}
                             />
                         )}
                         contentContainerStyle={styles.listContent}

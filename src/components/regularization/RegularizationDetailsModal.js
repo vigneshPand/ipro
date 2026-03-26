@@ -202,12 +202,11 @@ const RegularizationDetailsModal = ({ visible, onClose, showWithdraw = false, on
                                         disabled={loadingPreviousEntries}
                                     >
                                         <Text style={styles.toggleEntriesText}>{toggleButtonLabel}</Text>
-                                        {loadingPreviousEntries && (
-                                            <ActivityIndicator size="small" color="#3b82f6" style={styles.loadingSpinner} />
-                                        )}
                                     </TouchableOpacity>
                                 </View>
-
+                                {loadingPreviousEntries && (
+                                    <ActivityIndicator size="small" color="#3b82f6" style={styles.loadingSpinner} />
+                                )}
                                 {(!entriesToShow || entriesToShow.length === 0) ? (
                                     <View style={styles.emptyEntriesContainer}>
                                         <Text style={styles.emptyEntriesText}>No entries are available</Text>
@@ -367,6 +366,11 @@ const styles = StyleSheet.create({
     toggleEntriesBtn: {
         flexDirection: 'row',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#6092f6ff',
+        borderRadius: 8,
+        padding: 4,
+        backgroundColor: '#e8f0feff',
     },
     toggleEntriesText: {
         fontSize: 13,

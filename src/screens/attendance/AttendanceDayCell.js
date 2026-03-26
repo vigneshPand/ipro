@@ -56,27 +56,27 @@ const getStatusLabel = (item) => {
     if (leaveType) {
         const lt = leaveType.toLowerCase();
         if (lt === 'firsthalf') return 'FHL';
-        if (lt === 'secondhalf') return 'SHL';
-        if (lt === 'leave') return 'L';
+        if (lt === 'secondhalf') return '(SHL)';
+        if (lt === 'leave') return '(L)';
     }
 
     if (!status || status === 'No Status') return '-';
 
     switch (status) {
-        case 'Present': return 'P';
-        case 'Absent': return 'A';
-        case 'Week-Off': return 'W';
-        case 'Holiday': return 'H';
-        case 'Leave': return 'L';
+        case 'Present': return '(P)';
+        case 'Absent': return '(A)';
+        case 'Week-Off': return '(W)';
+        case 'Holiday': return '(H)';
+        case 'Leave': return '(L)';
         case 'Pending Approval': return '';
         default: return '-';
     }
 };
 
 const getBackgroundColor = (item) => {
-    const { status, leaveType } = item;
+    const { status, leaveType, regularizationStatus } = item;
 
-    if (leaveType) return STATUS_COLORS.Leave;
+    if (leaveType && !regularizationStatus) return STATUS_COLORS.Leave;
     if (status === 'Present') return STATUS_COLORS.Present;
     if (status === 'Absent') return STATUS_COLORS.Absent;
     if (status === 'Week-Off') return STATUS_COLORS['Week-Off'];
@@ -100,42 +100,62 @@ const getTextColor = (item) => {
     return '#999';
 };
 
+const subDays = (date, amount) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() - amount);
+    return d;
+};
+
 const AttendanceDayCell = ({
     item,
     index = 0,
     onPress,
     onEditPress,
+    selectedMonth,
+    selectedYear,
 }) => {
     const {
         date,
         status,
         workingHours,
         leaveType,
-        hasPendingOrTransferRegularization,
         permissionMinutes,
         wfhStatus,
         workmode,
         isFuture,
         isEmpty,
-        leaveStatus
+        regularizationStatus,
+        isTrailing,
+        isLeading
     } = item || {};
 
-    // Card click restricted to Present, WFH Pending, Partial Leave (FHL/SHL), and Permissions (PMS)
-    const canPress = !isFuture && (
+    // Card click: allow Present, WFH Pending, Partial Leave, Permissions, and regularizationStatus === true
+    const canPress = !isFuture && !isLeading && !isTrailing && (
         status === 'Present' ||
         wfhStatus === 'Pending' ||
         (permissionMinutes != null && permissionMinutes !== '') ||
-        (leaveType && (leaveType.toLowerCase() === 'firsthalf' || leaveType.toLowerCase() === 'secondhalf'))
+        (leaveType && (leaveType.toLowerCase() === 'firsthalf' || leaveType.toLowerCase() === 'secondhalf')) ||
+        regularizationStatus
     );
 
-    // Edit icon shows when hasPendingOrTransferRegularization === true AND working hours is not null
-    const showEditIcon =
-        !isFuture &&
-        (
-            !!hasPendingOrTransferRegularization ||
-            wfhStatus === 'Pending' ||
-            leaveStatus === 'Pending'
-        );
+    // Edit icon: show ONLY if regularizationStatus is falsy AND date is within last 7 days from today
+    let showEditIcon = false;
+    if (!isEmpty) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const month = selectedMonth !== undefined ? selectedMonth : today.getMonth();
+        const year = selectedYear !== undefined ? selectedYear : today.getFullYear();
+
+        const selectedDate = new Date(year, month, date);
+        selectedDate.setHours(0, 0, 0, 0);
+
+        const isWithinLast7Days =
+            selectedDate < today &&
+            selectedDate >= subDays(today, 7);
+
+        showEditIcon = !item.regularizationStatus && isWithinLast7Days;
+    }
 
     let workModeIcon = null;
     const wm = (workmode || '').toLowerCase();
@@ -163,8 +183,9 @@ const AttendanceDayCell = ({
         transform: [{ scale: scale.value }, { scale: pressScale.value }],
     }));
 
-    if (isEmpty) return <View style={[styles.cell, styles.emptyCell]} />;
-
+    if (isEmpty && !item.isLeading && !item.isTrailing) {
+        return <View style={[styles.cell, styles.emptyCell]} />;
+    }
     const bgColor = getBackgroundColor(item);
     const textColor = getTextColor(item);
     const statusLabel = getStatusLabel(item);
@@ -198,12 +219,18 @@ const AttendanceDayCell = ({
 
                     {/* TOP LAYER */}
                     <View style={styles.topRow}>
-                        <Text style={[styles.dateText, { color: textColor }]} numberOfLines={1} ellipsizeMode="tail">
+                        <Text
+                            style={[
+                                styles.dateText,
+                                { color: textColor },
+                                (isTrailing || isLeading) && { color: '#cbd5e1' }
+                            ]}
+                        >
                             {date}
                         </Text>
                     </View>
 
-                    {/* CENTER LAYER */}
+                    {/* Status */}
                     <View style={styles.center}>
                         {statusLabel ? (
                             <Text style={[
@@ -215,15 +242,22 @@ const AttendanceDayCell = ({
                             ]} numberOfLines={1}>
                                 {statusLabel}
                             </Text>
-                        ) : null}
-                        {showEditIcon && (
+                        ) : (
+                            <View style={styles.statusPlaceholder} />
+                        )}
+                    </View>
+                    {/* Edit Icon */}
+                    <View style={styles.editIconWrap}>
+                        {showEditIcon ? (
                             <TouchableOpacity
-                                style={styles.editIconOverlay}
+                                style={styles.editIconInline}
                                 onPress={() => onEditPress && onEditPress(item)}
                                 activeOpacity={0.7}
                             >
                                 <Icon name="edit" size={14} color={COLORS.orange} />
                             </TouchableOpacity>
+                        ) : (
+                            <View style={styles.editIconPlaceholder} />
                         )}
                     </View>
                     {/* BOTTOM LAYER */}
@@ -251,6 +285,8 @@ const styles = StyleSheet.create({
         margin: CELL_MARGIN,
         borderRadius: 6,
         padding: 6,
+        flexDirection: 'column',
+        alignItems: 'center',
         justifyContent: 'space-between',
         overflow: 'hidden',
     },
@@ -264,9 +300,8 @@ const styles = StyleSheet.create({
     },
 
     topRow: {
-        height: 20,
-        justifyContent: 'flex-start',
         alignItems: 'flex-start',
+        justifyContent: 'flex-start'
     },
 
     center: {
@@ -286,23 +321,34 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
 
+    statusPlaceholder: {
+        height: 16,
+    },
+
+    editIconWrap: {
+        paddingBottom: 4,
+    },
+
+    hoursPlaceholder: {
+        height: 14,
+    },
+
     statusLabelText: {
         fontWeight: 'bold',
     },
 
-    // ✏️ Edit icon overlay
-    editIconOverlay: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
-        width: 22,
-        height: 22,
-        borderRadius: 11,
+    editIconInline: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
         backgroundColor: '#fff4e5',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10,
-        elevation: 5,
+    },
+
+    editIconPlaceholder: {
+        width: 20,
+        height: 20,
     },
 
     // 🔥 RIBBON
@@ -310,15 +356,15 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 0,
         right: 0,
-        width: 15,
-        height: 15,
+        width: 13,
+        height: 13,
         overflow: 'hidden',
     },
 
     ribbon: {
         position: 'absolute',
-        top: -30,
-        right: -30,
+        top: -31,
+        right: -31,
         width: 75,
         height: 75,
         transform: [{ rotate: '45deg' }],

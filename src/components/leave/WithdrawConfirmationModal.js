@@ -3,7 +3,16 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import AppModal from '../common/AppModal';
 import { COLORS } from '../../utils/theme';
 
-const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading, isRegularize }) => {
+const WithdrawConfirmationModal = ({
+    visible,
+    onClose,
+    onConfirm,
+    isLoading,
+    isRegularize,
+    title = 'Withdraw Confirmation',
+    message = 'Are you sure you want to withdraw this request?',
+    confirmText = 'OK',
+}) => {
     const [remarks, setRemarks] = useState('');
     const [error, setError] = useState('');
 
@@ -26,7 +35,7 @@ const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading, isR
         <AppModal
             visible={visible}
             onClose={handleClose}
-            title="Withdraw Confirmation"
+            title={title}
             animationType="fade"
             position="center"
             headerStyle={styles.header}
@@ -35,7 +44,7 @@ const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading, isR
         >
             <View style={styles.body}>
                 <Text style={styles.messageText}>
-                    Are you sure you want to withdraw this request?
+                    {message}
                 </Text>
                 {!isRegularize && (
                     <TextInput
@@ -72,7 +81,7 @@ const WithdrawConfirmationModal = ({ visible, onClose, onConfirm, isLoading, isR
                         {isLoading ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <Text style={styles.okButtonText}>OK</Text>
+                            <Text style={styles.okButtonText}>{confirmText}</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -101,7 +110,7 @@ const styles = StyleSheet.create({
     messageText: {
         color: COLORS.blue,
         fontSize: 15,
-        textAlign: 'center',
+        textAlign: 'left',
         marginBottom: 20,
         fontWeight: '500',
     },
@@ -126,7 +135,7 @@ const styles = StyleSheet.create({
     },
     footer: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'flex-end',
         marginTop: 10,
         gap: 12,
     },
@@ -135,9 +144,9 @@ const styles = StyleSheet.create({
         borderColor: COLORS.red,
         backgroundColor: '#fff',
         paddingVertical: 8,
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         borderRadius: 6,
-        minWidth: 90,
+        minWidth: 80,
         alignItems: 'center',
     },
     cancelButtonText: {
@@ -148,9 +157,9 @@ const styles = StyleSheet.create({
     okButton: {
         backgroundColor: COLORS.blue,
         paddingVertical: 8,
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         borderRadius: 6,
-        minWidth: 90,
+        minWidth: 80,
         alignItems: 'center',
         justifyContent: 'center',
     },

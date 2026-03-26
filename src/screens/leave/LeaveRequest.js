@@ -6,6 +6,7 @@ import { COLORS } from '../../utils/theme';
 import PieChart from '../../components/common/PieChart';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
+import { formatMinutesToTime } from '../../utils/dateUtils';
 
 const parseNumber = (val) => {
     if (typeof val === 'string' && val.includes('hrs')) {
@@ -35,6 +36,7 @@ const LeaveCard = ({ item, navigation }) => {
     const isLossOfPay = item.title === 'Loss Of Pay';
     const isBereavement = item.title === 'Bereavement Leave';
     const isPaternityLeave = item.title === 'Paternity Leave';
+    const isPermission = item.title === 'Permission';
     const isSpecialCase = isLossOfPay || isBereavement || isPaternityLeave;
 
     return (
@@ -62,7 +64,7 @@ const LeaveCard = ({ item, navigation }) => {
                 <View style={styles.statsRow}>
                     <View style={styles.statItem}>
                         <Text style={[styles.statValue, { color: isSpecialCase ? CHART_COLORS.requested : CHART_COLORS.total }]} numberOfLines={1}>
-                            {isSpecialCase ? item.requested : item.total}
+                            {isPermission ? formatMinutesToTime(isSpecialCase ? item.requested : item.total) : (isSpecialCase ? item.requested : item.total)}
                         </Text>
                         <Text style={styles.statLabel}>
                             {isSpecialCase ? 'Requested' : 'Total'}
@@ -70,7 +72,7 @@ const LeaveCard = ({ item, navigation }) => {
                     </View>
                     <View style={styles.statItem}>
                         <Text style={[styles.statValue, { color: isLossOfPay ? CHART_COLORS.balance : isSpecialCase ? CHART_COLORS.used : CHART_COLORS.requested }]} numberOfLines={1}>
-                            {isLossOfPay ? (item.approved || item.used || '0') : isSpecialCase ? item.used : item.requested}
+                            {isPermission ? formatMinutesToTime(isLossOfPay ? (item.approved || item.used || '0') : isSpecialCase ? item.used : item.requested) : (isLossOfPay ? (item.approved || item.used || '0') : isSpecialCase ? item.used : item.requested)}
                         </Text>
                         <Text style={styles.statLabel}>
                             {isLossOfPay ? 'Approved' : isSpecialCase ? 'Used' : 'Requested'}
@@ -85,7 +87,9 @@ const LeaveCard = ({ item, navigation }) => {
                             <View style={styles.emptyStatPlaceholder} /> // Maintains fixed height
                         ) : (
                             <>
-                                <Text style={[styles.statValue, { color: CHART_COLORS.used }]} numberOfLines={1}>{item.used}</Text>
+                                <Text style={[styles.statValue, { color: CHART_COLORS.used }]} numberOfLines={1}>
+                                    {isPermission ? formatMinutesToTime(item.used) : item.used}
+                                </Text>
                                 <Text style={styles.statLabel}>Used</Text>
                             </>
                         )}
@@ -95,7 +99,9 @@ const LeaveCard = ({ item, navigation }) => {
                             <View style={styles.emptyStatPlaceholder} /> // Maintains fixed height
                         ) : (
                             <>
-                                <Text style={[styles.statValue, { color: CHART_COLORS.balance }]} numberOfLines={1}>{itemBalance}</Text>
+                                <Text style={[styles.statValue, { color: CHART_COLORS.balance }]} numberOfLines={1}>
+                                    {isPermission ? formatMinutesToTime(itemBalance) : itemBalance}
+                                </Text>
                                 <Text style={styles.statLabel}>Balance</Text>
                             </>
                         )}

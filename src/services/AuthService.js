@@ -7,8 +7,13 @@ import { AZURE_CONFIG, API_CONFIG } from '../constants/Config';
 class AuthService {
     async login() {
         try {
-            const result = await authorize(AZURE_CONFIG);
-
+            const result = await authorize({
+                ...AZURE_CONFIG,
+                prompt: 'select_account', // ✅ allow multiple accounts
+                additionalParameters: {
+                    prompt: 'select_account'
+                }
+            });
             if (result && result.accessToken) {
                 // Return ONLY the access token as requested
                 return result.accessToken;
@@ -72,10 +77,17 @@ class AuthService {
 
     async signOut() {
         try {
-            if (Keychain && typeof Keychain.resetGenericPassword === 'function') {
-                await Keychain.resetGenericPassword({ service: 'ipro_backend_service' });
-            }
+            // clear backend token
+            await Keychain.resetGenericPassword({
+                service: 'ipro_backend_service'
+            });
+
+            // clear user info
             await AsyncStorage.removeItem('user_profile');
+
+            // optional: clear Azure cached session (forces account picker)
+            await AsyncStorage.removeItem('azure_auth_state');
+
         } catch (error) {
             console.error('Logout Error:', error);
         }

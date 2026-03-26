@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLeaveStore from '../../store/useLeaveStore';
 import WithdrawConfirmationModal from './WithdrawConfirmationModal';
 import AuthService from '../../services/AuthService';
 import LoadingOverlay from '../LoadingOverlay';
+import { formatMinutesToTime } from '../../utils/dateUtils';
 
 const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -40,7 +41,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
     const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
 
     // Reset overlay state when modal visibility changes to prevent stale popups
-    React.useEffect(() => {
+    useEffect(() => {
         if (!visible) {
             setOverlay({ visible: false, message: '', type: 'loading', onConfirm: null, onCancel: null });
             setShowWithdrawModal(false);
@@ -55,6 +56,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         const session = (selectedLeaveDetails?.days && selectedLeaveDetails.days[0]?.session) || "Full Day";
 
         const res = await withdrawLeave(requestId, leaveId, session, remarks);
+
         setIsWithdrawing(false);
 
         if (res.success) {
@@ -139,15 +141,21 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
 
                             {/* No of Days */}
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>No of Days</Text>
-                                <Text style={styles.detailValue}>{selectedLeaveDetails.noOfDays}</Text>
+                                <Text style={styles.detailLabel}>{selectedLeaveDetails.type === 'Permission' ? 'No of Hours' : 'No of Days'}</Text>
+                                <Text style={styles.detailValue}>
+                                    {selectedLeaveDetails.type === 'Permission' ? formatMinutesToTime(selectedLeaveDetails.noOfDays * 60) : selectedLeaveDetails.noOfDays}
+                                </Text>
                             </View>
 
                             {/* Reviewed By */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Approval Pending With</Text>
-                                <Text style={styles.detailValue}>{selectedLeaveDetails.reviewByName || 'N/A'}</Text>
-                            </View>
+                            {showWithdraw && (
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>
+                                        {selectedLeaveDetails.status?.toLowerCase() === 'pending' ? 'Approval Pending ' : 'Reviewed By'}
+                                    </Text>
+                                    <Text style={styles.detailValue}>{selectedLeaveDetails.reviewByName || 'N/A'}</Text>
+                                </View>
+                            )}
 
                             {/* Leave Dates */}
                             {selectedLeaveDetails.days && selectedLeaveDetails.days.length > 0 && (
@@ -172,6 +180,15 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 </View>
                             </View>
 
+                            {/* Withdraw reason */}
+                            {!showWithdraw && (
+                                <View style={styles.reasonBlock}>
+                                    <Text style={styles.detailLabel}>Withdraw Comments</Text>
+                                    <View style={styles.reasonValueBox}>
+                                        <Text style={styles.reasonValueText}>{selectedLeaveDetails.withdrawComment || 'N/A'}</Text>
+                                    </View>
+                                </View>
+                            )}
                             {/* CC Members */}
                             {selectedLeaveDetails.cc && selectedLeaveDetails.cc.length > 0 && (
                                 <View style={styles.sectionBlock}>

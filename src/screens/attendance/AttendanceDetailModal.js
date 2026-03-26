@@ -21,6 +21,9 @@ import Animated, {
 import Tooltip from 'react-native-walkthrough-tooltip';
 import { COLORS, SHADOW } from '../../utils/theme';
 import AttendanceService from '../../services/AttendanceService';
+import WithdrawConfirmationModal from '../../components/leave/WithdrawConfirmationModal';
+import LoadingOverlay from '../../components/LoadingOverlay';
+import useLeaveStore from '../../store/useLeaveStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -67,6 +70,7 @@ const AttendanceDetailModal = ({
     selectedMonth,
     selectedYear,
     userId,
+    onWithdrawSuccess, // callback to refresh grid after withdraw
 }) => {
     const translateY = useSharedValue(SCREEN_HEIGHT);
     const [renderModal, setRenderModal] = useState(false);
@@ -77,6 +81,20 @@ const AttendanceDetailModal = ({
     // Tooltip states
     const [wfhTooltipVisible, setWfhTooltipVisible] = useState(false);
     const [regTooltipVisible, setRegTooltipVisible] = useState(false);
+    const [withdrawTooltipVisible, setWithdrawTooltipVisible] = useState(false);
+
+    // Withdraw Modal states
+    const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    // 'leave' | 'wfh' — determines API params and modal copy
+    const [withdrawType, setWithdrawType] = useState('leave');
+
+    const [overlay, setOverlay] = useState({ visible: false, message: '', type: 'loading', onConfirm: null });
+    const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
+    const showOverlaySuccess = useCallback((msg, onConfirm = hideOverlay) => setOverlay({ visible: true, message: msg, type: 'success', onConfirm }), [hideOverlay]);
+    const showOverlayError = useCallback((msg) => setOverlay({ visible: true, message: msg, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
+
+    const { withdrawLeaveFromAttendance } = useLeaveStore();
     useEffect(() => {
         if (visible) {
             setRenderModal(true);
@@ -119,10 +137,11 @@ const AttendanceDetailModal = ({
                 setActivityData([data]);
             } else {
                 setActivityData([]);
+                setApiError('This date has no timestamp');
             }
         } catch (err) {
-            // console.error('fetchActivityData error:', err);
-            setApiError('Failed to load activity data');
+            // DO NOT show API error / backend message — show only static message
+            setApiError('This date has no timestamp');
         } finally {
             setLoading(false);
         }
@@ -160,11 +179,62 @@ const AttendanceDetailModal = ({
     // 2. Regularization Approval Pending: regularizationStatus === true
     const showRegularization = raw.regularizationStatus === true;
     // 3. WFH Approval Pending: wfhStatus === "Pending"
-    const showWfhPending = raw.wfhStatus === 'Pending';
+    const showWfhPending = raw.wfhStatus === 'Pending' && raw.status === 'Pending Approval';
+    const showWfhWithdraw = raw.wfhStatus === 'Pending' && raw.status === 'WFH';
 
     // Date header text: "Stamps of 09 Mar 2026"
     const dayStr = String(d.date).padStart(2, '0');
     const headerDateText = `Stamps of ${dayStr} ${MONTH_NAMES_SHORT[selectedMonth]} ${selectedYear}`;
+
+    const isNoData = !!(apiError || activityData.length === 0);
+
+    // ─── Leave Withdraw Logic ───
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const selectedDate = new Date(selectedYear, selectedMonth, d.date);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(today.getDate() - 3);
+
+    const isWithin3Days = selectedDate <= today && selectedDate >= threeDaysAgo;
+
+    // Show withdraw icon if it's a leave case (has leaveType or Leave status)
+    const isLeaveCase = !!(raw.leaveType || raw.status === 'Leave' || raw.leaveStatus);
+    const isAlreadyWithdrawn = raw.leaveStatus === 'Withdraw';
+    const showWithdrawAction = isLeaveCase && !isAlreadyWithdrawn;
+
+    const handleWithdrawClick = (type = 'leave') => {
+        if (isWithin3Days) {
+            setWithdrawType(type);
+            setWithdrawModalVisible(true);
+        } else {
+            setWithdrawTooltipVisible(true);
+            setTimeout(() => setWithdrawTooltipVisible(false), 2500);
+        }
+    };
+
+    const onConfirmWithdraw = async (remarks) => {
+        setIsWithdrawing(true);
+        // WFH withdraw uses wfhId; Leave withdraw uses leaveId
+        const leaveId = withdrawType === 'wfh' ? raw.wfhId : raw.leaveId;
+        const res = await withdrawLeaveFromAttendance(leaveId, remarks);
+        setIsWithdrawing(false);
+        setWithdrawModalVisible(false);
+
+        if (res.success) {
+            showOverlaySuccess(res.message, () => {
+                hideOverlay();
+                handleClose();
+                if (onWithdrawSuccess) onWithdrawSuccess();
+            });
+        } else {
+            showOverlayError(res.message);
+        }
+    };
+
+    const formattedDateForWithdraw = `${dayStr} ${MONTH_NAMES_SHORT[selectedMonth]} ${selectedYear}`;
 
     return (
         <Modal
@@ -180,7 +250,11 @@ const AttendanceDetailModal = ({
                     onPress={handleClose}
                 />
                 <Animated.View
-                    style={[styles.modalContent, animatedStyle]}
+                    style={[
+                        styles.modalContent,
+                        isNoData && styles.modalContentNoData,
+                        animatedStyle
+                    ]}
                 >
                     {/* ─── Modal Header ─── */}
                     <View style={styles.modalHeader}>
@@ -188,11 +262,27 @@ const AttendanceDetailModal = ({
                             <Text style={styles.modalTitle}>{headerDateText}</Text>
                         </View>
                         <View style={styles.headerRight}>
-                            {/* Leave Approval Pending ⚠️ (moved from grid to modal) */}
-                            {showLeaveApprovalPending && (
-                                <View style={styles.leaveApprovalIconWrap}>
-                                    <Icons name="circle-exclamation" size={16} color={COLORS.red} />
-                                </View>
+                            {/* Leave Approval Pending (moved from grid to modal) */}
+                            {showLeaveApprovalPending && showWithdrawAction && (
+                                <Tooltip
+                                    isVisible={withdrawTooltipVisible}
+                                    content={
+                                        <Text style={styles.withdrawTooltipText}>
+                                            Leave can only be withdrawn within 3 days
+                                        </Text>
+                                    }
+                                    placement="bottom"
+                                    onClose={() => setWithdrawTooltipVisible(false)}
+                                    contentStyle={styles.withdrawTooltipContent}
+                                >
+                                    <TouchableOpacity
+                                        style={styles.leaveApprovalIconWrap}
+                                        onPress={() => handleWithdrawClick('leave')}
+                                    >
+                                        <Icons name="circle-exclamation" size={15} color={COLORS.red} />
+                                        <Text style={styles.withdrawText}>Withdraw</Text>
+                                    </TouchableOpacity>
+                                </Tooltip>
                             )}
                             {/* WFH Approval Pending */}
                             {showWfhPending && (
@@ -209,11 +299,20 @@ const AttendanceDetailModal = ({
                                 >
                                     <TouchableOpacity
                                         style={styles.wfhPendingIconWrap}
-                                        onPress={() => setWfhTooltipVisible(true)}
+                                        onPress={() => { setWfhTooltipVisible(true); setTimeout(() => setWfhTooltipVisible(false), 3000); }}
                                     >
                                         <Icons name="house-circle-exclamation" size={14} color="#f25d3bff" />
                                     </TouchableOpacity>
                                 </Tooltip>
+                            )}
+                            {showWfhWithdraw && (
+                                <TouchableOpacity
+                                    style={styles.leaveApprovalIconWrap}
+                                    onPress={() => handleWithdrawClick('wfh')}
+                                >
+                                    <Icons name="house-circle-exclamation" size={15} color="#eb6b4eff" />
+                                    <Text style={styles.withdrawText}>Withdraw</Text>
+                                </TouchableOpacity>
                             )}
                             {/* Regularization Approval Pending */}
                             {showRegularization && (
@@ -230,7 +329,7 @@ const AttendanceDetailModal = ({
                                 >
                                     <TouchableOpacity
                                         style={styles.regularizationIconWrap}
-                                        onPress={() => setRegTooltipVisible(true)}
+                                        onPress={() => { setRegTooltipVisible(true); setTimeout(() => setRegTooltipVisible(false), 3000); }}
                                     >
                                         <Text style={styles.regularizationText}>R</Text>
                                     </TouchableOpacity>
@@ -250,15 +349,9 @@ const AttendanceDetailModal = ({
                             <Text style={styles.loadingText}>Loading stamps...</Text>
                         </View>
                     ) : apiError ? (
-                        <View style={styles.errorContainer}>
-                            <Icon name="alert-circle-outline" size={28} color={COLORS.grayText} />
-                            <Text style={styles.errorText}>{apiError}</Text>
-                            <TouchableOpacity
-                                style={styles.retryBtn}
-                                onPress={fetchActivityData}
-                            >
-                                <Text style={styles.retryText}>Retry</Text>
-                            </TouchableOpacity>
+                        <View style={styles.noTimestampContainer}>
+                            <Icon name="time-outline" size={36} color={COLORS.grayText} />
+                            <Text style={styles.noTimestampText}>{apiError}</Text>
                         </View>
                     ) : activityData.length === 0 ? (
                         <View style={styles.emptyContainer}>
@@ -337,10 +430,10 @@ const AttendanceDetailModal = ({
 
                                         {/* Card Bottom: Permission & Remarks */}
                                         <View style={styles.cardFooter}>
-                                            <View style={styles.footerItem}>
-                                                <Text style={styles.footerLabel}>Permission:</Text>
+                                            {/* <View style={styles.footerItem}>
+                                                <Text style={styles.footerLabel}>Permission Status:</Text>
                                                 <Text style={styles.footerValue}>{perm}</Text>
-                                            </View>
+                                            </View> */}
                                             <View style={styles.footerItem}>
                                                 <Text style={styles.footerLabel}>Remarks:</Text>
                                                 <Text style={styles.remarksValue} numberOfLines={3}>{remarks}</Text>
@@ -352,6 +445,23 @@ const AttendanceDetailModal = ({
                         </ScrollView>
                     )}
                 </Animated.View>
+
+                {/* Withdraw Confirmation Modal */}
+                <WithdrawConfirmationModal
+                    visible={withdrawModalVisible}
+                    onClose={() => setWithdrawModalVisible(false)}
+                    onConfirm={onConfirmWithdraw}
+                    isLoading={isWithdrawing}
+                    title={withdrawType === 'wfh' ? 'WFH Withdraw' : 'Leave Withdraw'}
+                    message={
+                        withdrawType === 'wfh'
+                            ? `Are you sure you want to withdraw WFH for ${formattedDateForWithdraw}?`
+                            : `Are you sure you want to withdraw leave request for ${formattedDateForWithdraw}?`
+                    }
+                    confirmText="Confirm"
+                />
+
+                <LoadingOverlay {...overlay} />
             </View>
         </Modal>
     );
@@ -372,6 +482,10 @@ const styles = StyleSheet.create({
         maxHeight: SCREEN_HEIGHT * 0.75,
         minHeight: SCREEN_HEIGHT * 0.65,
         ...SHADOW,
+    },
+    modalContentNoData: {
+        height: 300,
+        minHeight: 300,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -397,6 +511,13 @@ const styles = StyleSheet.create({
     leaveApprovalIconWrap: {
         alignItems: 'center',
         justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 4,
+        borderWidth: 1,
+        borderColor: COLORS.red,
+        padding: 4,
+        borderRadius: 6,
+        backgroundColor: '#fff4e5',
     },
     leaveApprovalDot: {
         width: 22,
@@ -451,6 +572,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    withdrawIconWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#ffebee',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
     // Loading / Error / Empty states
     loadingContainer: {
@@ -491,6 +620,20 @@ const styles = StyleSheet.create({
         marginTop: 8,
         fontSize: 13,
         color: COLORS.grayText,
+    },
+
+    // "This date has no timestamp" error state
+    noTimestampContainer: {
+        paddingVertical: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    noTimestampText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: COLORS.grayText,
+        fontWeight: '500',
+        textAlign: 'center',
     },
 
     // Scroll view - FIXED: Changed from maxHeight to flex: 1
@@ -607,9 +750,9 @@ const styles = StyleSheet.create({
         width: 80,
     },
     footerValue: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: COLORS.darkText,
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#c4c0c0ff',
         flex: 1,
     },
     remarksValue: {
@@ -644,6 +787,23 @@ const styles = StyleSheet.create({
     tooltipText: {
         color: COLORS.text,
         fontSize: 12,
+        fontWeight: '600',
+    },
+    withdrawTooltipContent: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 4,
+        backgroundColor: '#e9e59eff',
+        maxWidth: 200,
+    },
+    withdrawTooltipText: {
+        color: '#333',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    withdrawText: {
+        color: COLORS.red,
+        fontSize: 13,
         fontWeight: '600',
     },
 });

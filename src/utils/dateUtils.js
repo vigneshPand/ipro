@@ -37,3 +37,10 @@ export const convertTimeToMinutes = (time) => {
     const [hours, minutes] = time.split(":");
     return (Number(hours) * 60) + Number(minutes);
 };
+// Helper: convert total minutes to HH:MM format
+export const formatMinutesToTime = (totalMinutes) => {
+    const num = parseFloat(totalMinutes) || 0;
+    const hours = Math.floor(num / 60);
+    const mins = Math.round(num % 60);
+    return `${hours}:${mins.toString().padStart(2, '0')}hrs`;
+};

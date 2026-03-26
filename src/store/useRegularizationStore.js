@@ -298,7 +298,7 @@ const useRegularizationStore = create((set, get) => ({
             set({ submitting: false, submitMessage: msg, submitSuccess: true });
             return { success: true };
         } catch (err) {
-            console.error('submitRegularization error:', err);
+            // Suppress logging in production
             const errMsg = typeof err?.response?.data === 'string' && err.response.data.trim()
                 ? err.response.data.trim()
                 : 'Failed to submit. Please try again.';

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
 import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
@@ -28,8 +29,8 @@ const LeaveHistoryScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
 
     const {
-        pendingLeaves, loadingPending, fetchPendingLeaves,
-        historyLeaves, historyLoading, fetchHistoryLeaves,
+        pendingLeaves, loadingPending, fetchPendingLeaves, fetchNextPendingPage,
+        historyLeaves, historyLoading, fetchHistoryLeaves, fetchNextHistoryPage,
         fetchLeaveDetails,
     } = useLeaveStore();
 
@@ -48,26 +49,55 @@ const LeaveHistoryScreen = ({ navigation }) => {
             const { userId, year, pageNo, sortBy, direction, keyword, ...extraParams } = params;
 
             if (activeTab === 'Pending') {
-                await fetchPendingLeaves(user.userId, new Date().getFullYear(), extraParams);
+                await fetchPendingLeaves(user.userId, new Date().getFullYear(), 0, extraParams);
             } else {
                 const finalFromDate = extraParams.fromDate;
                 const finalToDate = extraParams.toDate;
                 const { fromDate, toDate, ...historyExtraParams } = extraParams;
-                
+
                 const defaultRange = getMonthRange();
                 const fDate = finalFromDate || defaultRange.fromDate;
                 const tDate = finalToDate || defaultRange.toDate;
 
-                await fetchHistoryLeaves(user.userId, new Date().getFullYear(), fDate, tDate, historyExtraParams);
+                await fetchHistoryLeaves(user.userId, new Date().getFullYear(), fDate, tDate, 0, historyExtraParams);
             }
         } catch (err) {
             console.error(err);
         }
     }, [activeTab, buildQueryParams, fetchPendingLeaves, fetchHistoryLeaves]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData, filters]);
+    const handleEndReached = useCallback(async () => {
+        try {
+            const user = await AuthService.getUserInfo();
+            if (!user?.userId) return;
+
+            const params = buildQueryParams(user.userId, new Date().getFullYear());
+            const { userId, year, pageNo, sortBy, direction, keyword, ...extraParams } = params;
+
+            if (activeTab === 'Pending') {
+                await fetchNextPendingPage(user.userId, new Date().getFullYear(), extraParams);
+            } else {
+                const finalFromDate = extraParams.fromDate;
+                const finalToDate = extraParams.toDate;
+                const { fromDate, toDate, ...historyExtraParams } = extraParams;
+
+                const defaultRange = getMonthRange();
+                const fDate = finalFromDate || defaultRange.fromDate;
+                const tDate = finalToDate || defaultRange.toDate;
+
+                await fetchNextHistoryPage(user.userId, new Date().getFullYear(), fDate, tDate, historyExtraParams);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }, [activeTab, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [fetchData, filters])
+    );
 
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
@@ -170,6 +200,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         ListEmptyComponent={renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
                         initialNumToRender={10}
                         maxToRenderPerBatch={10}
                         windowSize={5}
@@ -198,6 +229,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         ListEmptyComponent={renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
                         initialNumToRender={10}
                         maxToRenderPerBatch={10}
                         windowSize={5}

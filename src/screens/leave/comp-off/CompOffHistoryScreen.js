@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../../utils/theme';
 import useCompOffStore from '../../../store/useCompOffStore';
 import AuthService from '../../../services/AuthService';
 import HistoryTabs from '../../../components/leave/HistoryTabs';
-import HistoryCard from '../../../components/leave/HistoryCard';
-import HistoryDetailsModal from '../../../components/leave/HistoryDetailsModal';
+import PendingCompOffCard from './PendingCompOffCard';
+import HistoryCompOffCard from './HistoryCompOffCard';
+import CompOffDetailsModal from './CompOffDetailsModal';
 import useHistoryFilters from '../../../hooks/useHistoryFilters';
 import HistoryFilters from '../../../components/historyFilters/HistoryFilters';
 
@@ -24,10 +26,12 @@ const getMonthRange = () => {
 const CompOffHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [modalVisible, setModalVisible] = useState(false);
+    const [modalType, setModalType] = useState('Pending');
 
     const {
-        pendingList, historyList, selectedDetails, loading, refreshing,
+        pendingList, historyList, selectedDetails, pendingLoading, historyLoading, refreshing,
         fetchPendingCompOff, fetchHistoryCompOff, fetchCompOffDetails,
+        fetchNextPendingPage, fetchNextHistoryPage,
         refreshPending, refreshHistory
     } = useCompOffStore();
 
@@ -61,21 +65,40 @@ const CompOffHistoryScreen = ({ navigation }) => {
             const year = new Date().getFullYear();
 
             if (activeTab === 'Pending') {
-                await fetchPendingCompOff(year, buildPendingExtra());
+                await fetchPendingCompOff(year, 0, buildPendingExtra());
             } else {
                 const defaultRange = getMonthRange();
                 const startDate = filters.fromDate || defaultRange.fromDate;
                 const endDate = filters.toDate || defaultRange.toDate;
-                await fetchHistoryCompOff(year, startDate, endDate, buildHistoryExtra());
+                await fetchHistoryCompOff(year, startDate, endDate, 0, buildHistoryExtra());
             }
         } catch (err) {
             console.error(err);
         }
     }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, fetchPendingCompOff, fetchHistoryCompOff]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    const handleEndReached = useCallback(async () => {
+        try {
+            const year = new Date().getFullYear();
+
+            if (activeTab === 'Pending') {
+                await fetchNextPendingPage(year, buildPendingExtra());
+            } else {
+                const defaultRange = getMonthRange();
+                const startDate = filters.fromDate || defaultRange.fromDate;
+                const endDate = filters.toDate || defaultRange.toDate;
+                await fetchNextHistoryPage(year, startDate, endDate, buildHistoryExtra());
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, fetchNextPendingPage, fetchNextHistoryPage]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+        }, [fetchData])
+    );
 
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
@@ -107,11 +130,13 @@ const CompOffHistoryScreen = ({ navigation }) => {
         }
     }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, refreshPending, refreshHistory]);
 
-    const handleCardPress = async (item) => {
+    const handleCardPress = async (item, type) => {
         setModalVisible(true);
+        setModalType(type);
         const user = await AuthService.getUserInfo();
         if (user?.userId) {
-            await fetchCompOffDetails(item.id, user.userId);
+            const itemId = item.id || item.requestId || item.compOffGrantId || item.compOffId || item.grantId || item.compOffGrantRequestId;
+            await fetchCompOffDetails(itemId, user.userId);
         }
     };
 
@@ -121,8 +146,6 @@ const CompOffHistoryScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>No comp-off records found</Text>
         </View>
     );
-
-    const currentData = activeTab === 'Pending' ? pendingList : historyList;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -155,41 +178,70 @@ const CompOffHistoryScreen = ({ navigation }) => {
                 showStatusFilter={activeTab === 'History'}
             />
 
-            {loading && !refreshing ? (
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color={COLORS.blue} />
-                </View>
+            {/* Tab Content */}
+            {activeTab === 'Pending' ? (
+                pendingLoading && !refreshing ? (
+                    <View style={styles.loaderContainer}>
+                        <ActivityIndicator size="large" color={COLORS.blue} />
+                    </View>
+                ) : (
+                    <FlatList
+                        data={pendingList}
+                        keyExtractor={(item) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || Math.random()).toString()}
+                        renderItem={({ item }) => (
+                            <PendingCompOffCard
+                                item={item}
+                                onPress={() => handleCardPress(item, 'pending')}
+                            />
+                        )}
+                        contentContainerStyle={styles.listContent}
+                        ListEmptyComponent={renderEmpty}
+                        showsVerticalScrollIndicator={false}
+                        onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={10}
+                        windowSize={5}
+                        removeClippedSubviews={true}
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
+                        }
+                    />
+                )
             ) : (
-                <FlatList
-                    data={currentData}
-                    keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-                    renderItem={({ item }) => (
-                        <HistoryCard
-                            date={item.appliedOn || item.date}
-                            startDate={item.startDate}
-                            endDate={item.endDate}
-                            status={item.status}
-                            assignedToName={item.assignToName}
-                            reviewedByName={item.reviewByName}
-                            onPress={() => handleCardPress(item)}
-                        />
-                    )}
-                    contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={renderEmpty}
-                    showsVerticalScrollIndicator={false}
-                    onEndReachedThreshold={0.5}
-                    initialNumToRender={10}
-                    maxToRenderPerBatch={10}
-                    windowSize={5}
-                    removeClippedSubviews={true}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
-                    }
-                />
+                historyLoading && !refreshing ? (
+                    <View style={styles.loaderContainer}>
+                        <ActivityIndicator size="large" color={COLORS.blue} />
+                    </View>
+                ) : (
+                    <FlatList
+                        data={historyList}
+                        keyExtractor={(item) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || Math.random()).toString()}
+                        renderItem={({ item }) => (
+                            <HistoryCompOffCard
+                                item={item}
+                                onPress={() => handleCardPress(item, 'history')}
+                            />
+                        )}
+                        contentContainerStyle={styles.listContent}
+                        ListEmptyComponent={renderEmpty}
+                        showsVerticalScrollIndicator={false}
+                        onEndReachedThreshold={0.5}
+                        onEndReached={handleEndReached}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={10}
+                        windowSize={5}
+                        removeClippedSubviews={true}
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
+                        }
+                    />
+                )
             )}
 
-            <HistoryDetailsModal
+            <CompOffDetailsModal
                 visible={modalVisible}
+                type={modalType}
                 onClose={() => setModalVisible(false)}
                 detailsData={selectedDetails}
             />

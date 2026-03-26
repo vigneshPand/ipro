@@ -16,9 +16,9 @@ import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SHADOW } from '../../utils/theme';
 import AuthService from '../../services/AuthService';
 import useAttendanceGridStore from '../../store/useAttendanceGridStore';
-import AttendanceDayCell from '../../components/attendance/AttendanceDayCell';
-import AttendanceDetailModal from '../../components/attendance/AttendanceDetailModal';
-import RegularizationEditModal from '../../components/attendance/RegularizationEditModal';
+import AttendanceDayCell from './AttendanceDayCell';
+import AttendanceDetailModal from './AttendanceDetailModal';
+import RegularizationEditModal from './RegularizationEditModal';
 import useRegularizationStore from '../../store/useRegularizationStore';
 
 const MONTH_NAMES = [
@@ -39,7 +39,7 @@ const CELL_HEIGHT = CELL_SIZE * 2.8;
 const LEGEND_COLOR_ITEMS = [
     { label: 'Present (P)', color: '#e8f5e9', border: '#c8e6c9' },
     { label: 'Absent (A)', color: '#ffebee', border: '#ffcdd2' },
-    { label: 'Week-Off (W)', color: '#f5f5f5', border: '#e0e0e0' },
+    { label: 'Week-Off (W)', color: '#e6e3e3ff', border: '#e0e0e0' },
     { label: 'Leave', color: '#e3f2fd', border: '#bbdefb' },
     { label: 'Holiday (H)', color: '#f3e5f5', border: '#e1bee7' },
 ];
@@ -48,6 +48,7 @@ const WFH_APPROVAL_PENDING = 'WFH Approval Pending';
 const LEAVE_APPROVAL_PENDING = 'Leave Approval Pending';
 const REGULARIZATION_APPROVAL_PENDING = 'Regularization Approval Pending';
 const LEAVE_WITHDRAWN = 'Leave can only be withdrawn within 3 days.';
+const REGULARIZE = 'Regularize';
 
 const AttendanceGridScreen = ({ navigation }) => {
     const {
@@ -115,8 +116,15 @@ const AttendanceGridScreen = ({ navigation }) => {
         const gridItems = [];
 
         // Leading empty cells for alignment
+        const prevMonthLastDate = new Date(year, month, 0).getDate();
+
         for (let i = 0; i < firstDayOfMonth; i++) {
-            gridItems.push({ key: `empty-${i}`, isEmpty: true });
+            gridItems.push({
+                key: `empty-${i}`,
+                isEmpty: false,
+                date: prevMonthLastDate - firstDayOfMonth + i + 1,
+                isLeading: true,
+            });
         }
 
         // Actual days
@@ -143,10 +151,19 @@ const AttendanceGridScreen = ({ navigation }) => {
         }
 
         // Trailing empty cells to fill the last row
+        // Trailing next month dates (UI only)
         const remainder = gridItems.length % 7;
         if (remainder !== 0) {
-            for (let i = 0; i < 7 - remainder; i++) {
-                gridItems.push({ key: `trail-${i}`, isEmpty: true });
+            const trailingCount = 7 - remainder;
+
+            for (let i = 1; i <= trailingCount; i++) {
+                gridItems.push({
+                    key: `trail-${i}`,
+                    isEmpty: false,
+                    isTrailing: true,   // ✅ mark as trailing
+                    date: i,            // next month dates
+                    isFuture: true,
+                });
             }
         }
 
@@ -175,12 +192,13 @@ const AttendanceGridScreen = ({ navigation }) => {
     const handleDayPress = useCallback((item) => {
         if (item.isEmpty) return;
 
-        // Card click restricted to Present, WFH Pending, Partial Leave (FHL/SHL), and Permissions (PMS)
+        // Card click: Present, WFH Pending, Partial Leave, Permissions, regularizationStatus===true
         const canPress = !item.isFuture && (
             item.status === 'Present' ||
             item.wfhStatus === 'Pending' ||
             (item.permissionMinutes != null && item.permissionMinutes !== '') ||
-            (item.leaveType && (item.leaveType.toLowerCase() === 'firsthalf' || item.leaveType.toLowerCase() === 'secondhalf'))
+            (item.leaveType && (item.leaveType.toLowerCase() === 'firsthalf' || item.leaveType.toLowerCase() === 'secondhalf')) ||
+            item.regularizationStatus === true
         );
 
         if (!canPress) return;
@@ -219,9 +237,11 @@ const AttendanceGridScreen = ({ navigation }) => {
                 isSelected={selectedDay?.key === item.key}
                 onPress={() => handleDayPress(item)}
                 onEditPress={handleEditPress}
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
             />
         );
-    }, [handleDayPress, handleEditPress, selectedDay]);
+    }, [handleDayPress, handleEditPress, selectedDay, selectedMonth, selectedYear]);
 
     // ─────────── Main render ───────────
     return (
@@ -269,6 +289,10 @@ const AttendanceGridScreen = ({ navigation }) => {
                 <View style={styles.legendItem}>
                     <Icons name="house-circle-exclamation" size={14} color="#f25d3bff" />
                     <Text style={styles.legendsText}>{WFH_APPROVAL_PENDING}</Text>
+                </View>
+                <View style={styles.legendItem}>
+                    <Icons name="edit" size={15} color={COLORS.orange} />
+                    <Text style={styles.legendsText}>{REGULARIZE}</Text>
                 </View>
                 <View style={styles.legendItem}>
                     <View style={styles.regularizationIconWrap}>
@@ -330,7 +354,6 @@ const AttendanceGridScreen = ({ navigation }) => {
                 visible={detailModalVisible}
                 onClose={() => {
                     setDetailModalVisible(false);
-                    // Reset selection to today after closing modal
                     const todayItem = calendarGrid.find(i => i.isToday);
                     if (todayItem) setSelectedDay(todayItem);
                 }}
@@ -338,6 +361,10 @@ const AttendanceGridScreen = ({ navigation }) => {
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
                 userId={userId}
+                onWithdrawSuccess={() => {
+                    setDetailModalVisible(false);
+                    loadData();
+                }}
             />
 
             {/* Regularization Edit Modal (opened from grid edit icon) */}
@@ -441,7 +468,7 @@ const styles = StyleSheet.create({
         marginL: 4,
     },
     legendsText: {
-        fontSize: 11,
+        fontSize: 12,
         color: COLORS.darkText,
         fontWeight: '500',
         marginLeft: 4,

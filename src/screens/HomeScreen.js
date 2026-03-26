@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/SimpleLineIcons';
 import Icons from 'react-native-vector-icons/MaterialCommunityIcons';
 import moment from 'moment';
@@ -22,6 +23,7 @@ import { WORK_LOCATIONS, OFFICE_LOCATION } from '../constants/Config';
 import { COLORS, SHADOW } from '../utils/theme';
 import { calculateDistance } from '../utils/LocationHelper';
 import LoadingOverlay from '../components/LoadingOverlay';
+import WFHCheckInConfirmModal from '../components/common/WFHCheckInConfirmModal';
 
 const HomeScreen = ({ route, navigation }) => {
     const userName = route?.params?.userName || route?.params?.displayName;
@@ -51,6 +53,14 @@ const HomeScreen = ({ route, navigation }) => {
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    // WFH Confirmation Modal State
+    const [showWFHModal, setShowWFHModal] = useState(false);
+
+    // Ref to persist selectedWorkMode across closures (needed for auto check-in callback)
+    const selectedWorkModeRef = useRef(null);
+    // Ref to track which action (CHECK_IN / CHECK_OUT) triggered the WFH modal
+    const pendingActionRef = useRef('CHECK_IN');
+
     const hour = new Date().getHours();
     let greeting = "Welcome back";
     if (hour < 12) greeting = "Good Morning";
@@ -63,10 +73,15 @@ const HomeScreen = ({ route, navigation }) => {
         }, 1000);
 
         requestLocationPermission();
-        fetchInitialData();
 
         return () => clearInterval(timer);
-    }, [fetchInitialData]);
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchInitialData();
+        }, [fetchInitialData])
+    );
 
     const fetchInitialData = React.useCallback(async (isRefreshing = false) => {
         if (!isRefreshing) showLoading('Fetching data...');
@@ -146,9 +161,72 @@ const HomeScreen = ({ route, navigation }) => {
         }
     };
 
+    // ─── Auto action (check-in or check-out) after WFH apply ───
+    const triggerAutoAction = useCallback(async () => {
+        const actionType = pendingActionRef.current; // 'CHECK_IN' | 'CHECK_OUT'
+        const isCheckIn = actionType === 'CHECK_IN';
+        showLoading(isCheckIn ? 'Checking In (WFH)...' : 'Checking Out (WFH)...');
+        try {
+            const userInfo = await AuthService.getUserInfo();
+            const token = await AuthService.getBackendToken();
+            if (!token || !userInfo?.userId) {
+                hideOverlay();
+                return;
+            }
+
+            Geolocation.getCurrentPosition(
+                async (position) => {
+                    // Reuse the same single payload pattern as handleConfirmSelection
+                    const payload = {
+                        userId: userInfo.userId,
+                        location: 'Chennai',
+                        workMode: 'Home',
+                        currStatus: isCheckIn, // true = check-in, false = check-out
+                        remarks: '',
+                    };
+                    try {
+                        await AttendanceService.checkInOut(payload);
+                        showSuccess(
+                            isCheckIn
+                                ? 'WFH applied & Checked In successfully!'
+                                : 'WFH applied & Checked Out successfully!',
+                            () => {
+                                hideOverlay();
+                                fetchInitialData();
+                            }
+                        );
+                    } catch (err) {
+                        hideOverlay();
+                        const msg = err?.response?.data?.message || err?.response?.data || err?.message || 'Action failed after WFH apply.';
+                        showError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+                    }
+                },
+                () => {
+                    hideOverlay();
+                    showError('Unable to fetch GPS location.');
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            );
+        } catch (err) {
+            hideOverlay();
+            console.error('triggerAutoAction error:', err);
+        }
+    }, [showLoading, hideOverlay, showSuccess, showError, fetchInitialData]);
+
+    const handleWFHConfirm = useCallback(() => {
+        setShowWFHModal(false);
+        navigation.navigate('LeaveApply', {
+            leaveType: 'Work From Home',
+            isWFHCheckInFlow: true,
+            onWFHApplySuccess: triggerAutoAction,
+        });
+    }, [navigation, triggerAutoAction]);
+
     const handleAttendanceClick = () => {
         const isCurrentlyCheckedIn = !showCheckInButton;
-        setSelectedWorkMode(isCurrentlyCheckedIn ? activeWorkMode : null);
+        const mode = isCurrentlyCheckedIn ? activeWorkMode : null;
+        setSelectedWorkMode(mode);
+        selectedWorkModeRef.current = mode;
         setShowLocationModal(true);
     };
 
@@ -243,7 +321,20 @@ const HomeScreen = ({ route, navigation }) => {
                             }
                         }
 
-                        showError(errorMessage);
+                        // Check if this is a WFH-related error (applies to both check-in and check-out on Home mode)
+                        if (
+                            selectedWorkMode === 'Home' &&
+                            (errorMessage.includes('Insufficient office work hours') ||
+                                errorMessage.includes('WFH') ||
+                                errorMessage.includes('not assigned with WFH'))
+                        ) {
+                            hideOverlay();
+                            // Mark the action type so triggerAutoAction knows what to do after WFH apply
+                            pendingActionRef.current = showCheckInButton ? 'CHECK_IN' : 'CHECK_OUT';
+                            setShowWFHModal(true);
+                        } else {
+                            showError(errorMessage);
+                        }
                     }
                 },
                 (error) => {
@@ -409,6 +500,13 @@ const HomeScreen = ({ route, navigation }) => {
             </Modal>
 
             <LoadingOverlay {...overlay} />
+
+            {/* WFH Check-In Confirmation Modal */}
+            <WFHCheckInConfirmModal
+                visible={showWFHModal}
+                onClose={() => setShowWFHModal(false)}
+                onConfirm={handleWFHConfirm}
+            />
         </SafeAreaView>
     );
 };

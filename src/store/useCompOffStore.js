@@ -6,41 +6,53 @@ const useCompOffStore = create((set, get) => ({
     pendingList: [],
     historyList: [],
     selectedDetails: null,
-    loading: false,
+    loadingLeaveDetails: false,
+    pendingLoading: false,
+    historyLoading: false,
     refreshing: false,
+    pendingPageNo: 0,
+    pendingTotalPages: 0,
+    historyPageNo: 0,
+    historyTotalPages: 0,
 
     // Overview state
     overview: null,
     overviewLoading: false,
 
     // Actions
-    fetchPendingCompOff: async (year = new Date().getFullYear(), extraParams = {}) => {
-        set({ loading: true });
+    fetchPendingCompOff: async (year = new Date().getFullYear(), pageNo = 0, extraParams = {}) => {
+        set({ pendingLoading: true });
         try {
             const response = await apiClient.get('/comp-off-grant/pending-requests', {
                 params: {
-                    page: 0,
+                    page: pageNo,
+                    size: 10,
                     sortBy: 'startDate',
                     sortDir: 'asc',
                     year,
                     ...extraParams,
                 },
             });
-            set({ pendingList: response.data || [] });
+            const data = response.data;
+            const content = data?.content || data || [];
+            set({
+                pendingList: pageNo === 0 ? content : [...get().pendingList, ...content],
+                pendingPageNo: pageNo,
+                pendingTotalPages: data?.totalPages || 0,
+                pendingLoading: false
+            });
         } catch (error) {
             console.error('fetchPendingCompOff error:', error);
-            set({ pendingList: [] });
-        } finally {
-            set({ loading: false });
+            set({ pendingLoading: false });
         }
     },
 
-    fetchHistoryCompOff: async (year = new Date().getFullYear(), startDate, endDate, extraParams = {}) => {
-        set({ loading: true });
+    fetchHistoryCompOff: async (year = new Date().getFullYear(), startDate, endDate, pageNo = 0, extraParams = {}) => {
+        set({ historyLoading: true });
         try {
             const response = await apiClient.get('/comp-off-grant/history', {
                 params: {
-                    page: 0,
+                    page: pageNo,
                     size: 10,
                     sortBy: 'start_date',
                     sortDir: 'desc',
@@ -50,17 +62,22 @@ const useCompOffStore = create((set, get) => ({
                     ...extraParams,
                 },
             });
-            set({ historyList: response.data?.content || response.data || [] });
+            const data = response.data;
+            const content = data?.content || data || [];
+            set({
+                historyList: pageNo === 0 ? content : [...get().historyList, ...content],
+                historyPageNo: pageNo,
+                historyTotalPages: data?.totalPages || 0,
+                historyLoading: false
+            });
         } catch (error) {
             console.error('fetchHistoryCompOff error:', error);
-            set({ historyList: [] });
-        } finally {
-            set({ loading: false });
+            set({ historyLoading: false });
         }
     },
 
     fetchCompOffDetails: async (id, userId) => {
-        set({ loading: true });
+        set({ loadingLeaveDetails: true });
         try {
             const response = await apiClient.get(`/comp-off-grant/details?id=${id}&userId=${userId}`);
             set({ selectedDetails: response.data || null });
@@ -68,7 +85,7 @@ const useCompOffStore = create((set, get) => ({
             console.error('fetchCompOffDetails error:', error);
             set({ selectedDetails: null });
         } finally {
-            set({ loading: false });
+            set({ loadingLeaveDetails: false });
         }
     },
 
@@ -84,7 +101,7 @@ const useCompOffStore = create((set, get) => ({
                     ...extraParams,
                 },
             });
-            set({ pendingList: response.data || [] });
+            set({ pendingList: response.data?.content || response.data || [] });
         } catch (error) {
             console.error('refreshPending error:', error);
         } finally {
@@ -135,6 +152,18 @@ const useCompOffStore = create((set, get) => ({
             const msg = error?.response?.data?.message || error?.response?.data || 'Failed to apply comp-off grant';
             return { success: false, message: typeof msg === 'string' ? msg : JSON.stringify(msg) };
         }
+    },
+
+    fetchNextPendingPage: async (year = new Date().getFullYear(), extraParams = {}) => {
+        const { pendingPageNo, pendingTotalPages, pendingLoading } = get();
+        if (pendingLoading || pendingPageNo + 1 >= pendingTotalPages) return;
+        await get().fetchPendingCompOff(year, pendingPageNo + 1, extraParams);
+    },
+
+    fetchNextHistoryPage: async (year = new Date().getFullYear(), startDate, endDate, extraParams = {}) => {
+        const { historyPageNo, historyTotalPages, historyLoading } = get();
+        if (historyLoading || historyPageNo + 1 >= historyTotalPages) return;
+        await get().fetchHistoryCompOff(year, startDate, endDate, historyPageNo + 1, extraParams);
     },
 }));
 
