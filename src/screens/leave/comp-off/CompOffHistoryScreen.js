@@ -180,7 +180,7 @@ const CompOffHistoryScreen = ({ navigation }) => {
 
             {/* Tab Content */}
             {activeTab === 'Pending' ? (
-                pendingLoading && !refreshing ? (
+                pendingLoading && !refreshing && pendingList.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -195,7 +195,7 @@ const CompOffHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={pendingLoading ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -206,10 +206,17 @@ const CompOffHistoryScreen = ({ navigation }) => {
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
+                        ListFooterComponent={
+                            pendingLoading && pendingList.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
+                        }
                     />
                 )
             ) : (
-                historyLoading && !refreshing ? (
+                historyLoading && !refreshing && historyList.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -224,7 +231,7 @@ const CompOffHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={historyLoading ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -234,6 +241,13 @@ const CompOffHistoryScreen = ({ navigation }) => {
                         removeClippedSubviews={true}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
+                        }
+                        ListFooterComponent={
+                            historyLoading && historyList.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
                         }
                     />
                 )
@@ -292,7 +306,11 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    }
+    },
+    footerLoader: {
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
 });
 
 export default CompOffHistoryScreen;

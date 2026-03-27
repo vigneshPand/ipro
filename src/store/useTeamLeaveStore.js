@@ -120,6 +120,34 @@ const useTeamLeaveStore = create((set, get) => ({
     // ─── Reset ───
     resetPending: () => set({ pendingList: [], pendingPageNo: 0, pendingTotalPages: 0 }),
     resetHistory: () => set({ historyList: [], historyPageNo: 0, historyTotalPages: 0 }),
+
+    // ─── Manager Actions ───
+    approveLeave: async (requestId, managerId) => {
+        try {
+            const res = await LeaveService.approveLeave(requestId, managerId);
+            return res;
+        } catch (error) {
+            return { success: false, message: error?.message || "Failed to approve leave request" };
+        }
+    },
+
+    rejectLeave: async (requestId, managerId, remarks) => {
+        try {
+            const res = await LeaveService.rejectLeave(requestId, managerId, remarks);
+            return res;
+        } catch (error) {
+            return { success: false, message: error?.message || "Failed to reject leave request" };
+        }
+    },
+
+    transferLeave: async (requestId, managerId) => {
+        try {
+            const res = await LeaveService.transferLeave(requestId, managerId);
+            return res;
+        } catch (error) {
+            return { success: false, message: error?.message || "Failed to transfer leave request" };
+        }
+    },
 }));
 
 export default useTeamLeaveStore;

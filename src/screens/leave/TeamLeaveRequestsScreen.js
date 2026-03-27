@@ -11,6 +11,7 @@ import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
 import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
 import AuthService from '../../services/AuthService';
+import LoadingOverlay from '../../components/LoadingOverlay';
 import useTeamLeaveStore from '../../store/useTeamLeaveStore';
 
 const DEBOUNCE_MS = 400;
@@ -267,55 +268,55 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                 showStatusFilter={activeTab === 'History'}
             />
 
-            {/* Content */}
-            {isLoading && listData.length === 0 && !refreshing ? (
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color={COLORS.primary} />
-                </View>
-            ) : (
-                <FlatList
-                    data={listData}
-                    keyExtractor={(item, index) => `${item.id}-${index}`}
-                    renderItem={({ item }) =>
-                        activeTab === 'Pending' ? (
-                            <PendingLeaveCard
-                                userName={item.userName || item.name}
-                                type={item.type}
-                                days={item.noOfDays}
-                                status={item.status}
-                                pendingWith={item.pendingWith || item.assignToName}
-                                startDate={item.startDate}
-                                endDate={item.endDate}
-                                onPress={() => handleCardPress(item)}
-                            />
-                        ) : (
-                            <HistoryLeaveCard
-                                item={item}
-                                onPress={handleCardPress}
-                            />
-                        )
-                    }
-                    contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={renderEmpty}
-                    showsVerticalScrollIndicator={false}
-                    onEndReachedThreshold={0.5}
-                    onEndReached={handleEndReached}
-                    initialNumToRender={10}
-                    maxToRenderPerBatch={10}
-                    windowSize={5}
-                    removeClippedSubviews={true}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
-                    }
-                    ListFooterComponent={
-                        isLoading && listData.length > 0 ? (
-                            <View style={styles.footerLoader}>
-                                <ActivityIndicator size="small" color={COLORS.primary} />
-                            </View>
-                        ) : null
-                    }
-                />
-            )}
+            {/* Content searching loader overlay */}
+            <LoadingOverlay
+                visible={isLoading && listData.length === 0 && !refreshing}
+                message="Fetching requests..."
+                type="loading"
+            />
+
+            <FlatList
+                data={listData}
+                keyExtractor={(item, index) => `${item.id}-${index}`}
+                renderItem={({ item }) =>
+                    activeTab === 'Pending' ? (
+                        <PendingLeaveCard
+                            userName={item.userName || item.name}
+                            type={item.type}
+                            days={item.noOfDays}
+                            status={item.status}
+                            pendingWith={item.pendingWith || item.assignToName}
+                            startDate={item.startDate}
+                            endDate={item.endDate}
+                            onPress={() => handleCardPress(item)}
+                        />
+                    ) : (
+                        <HistoryLeaveCard
+                            item={item}
+                            onPress={handleCardPress}
+                        />
+                    )
+                }
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={isLoading ? null : renderEmpty}
+                showsVerticalScrollIndicator={false}
+                onEndReachedThreshold={0.5}
+                onEndReached={handleEndReached}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
+                }
+                ListFooterComponent={
+                    isLoading && listData.length > 0 ? (
+                        <View style={styles.footerLoader}>
+                            <ActivityIndicator size="small" color={COLORS.primary} />
+                        </View>
+                    ) : null
+                }
+            />
 
             {/* Details Modal (shared) */}
             <LeaveHistoryDetailsModal
@@ -324,6 +325,7 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                 showWithdraw={false}
                 externalLeaveDetails={selectedLeaveDetails}
                 externalLoadingDetails={loadingLeaveDetails}
+                onTransferSuccess={() => fetchData(searchQuery)}
             />
 
         </SafeAreaView>
@@ -435,7 +437,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     footerLoader: {
-        paddingVertical: 20,
+        paddingVertical: 10,
         alignItems: 'center',
     },
 });

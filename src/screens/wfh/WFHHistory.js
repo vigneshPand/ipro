@@ -181,7 +181,7 @@ const WFHHistoryScreen = ({ navigation }) => {
 
             {/* Tab Content */}
             {activeTab === 'Pending' ? (
-                loadingPending && !refreshing ? (
+                loadingPending && !refreshing && pendingList.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -201,7 +201,7 @@ const WFHHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={loadingPending ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -211,10 +211,17 @@ const WFHHistoryScreen = ({ navigation }) => {
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
+                        ListFooterComponent={
+                            loadingPending && pendingList.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
+                        }
                     />
                 )
             ) : (
-                loadingHistory && !refreshing ? (
+                loadingHistory && !refreshing && historyList.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -229,7 +236,7 @@ const WFHHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={loadingHistory ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -238,6 +245,13 @@ const WFHHistoryScreen = ({ navigation }) => {
                         windowSize={5}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
+                        }
+                        ListFooterComponent={
+                            loadingHistory && historyList.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
                         }
                     />
                 )
@@ -336,6 +350,10 @@ const styles = StyleSheet.create({
     loaderContainer: {
         flex: 1,
         justifyContent: 'center',
+        alignItems: 'center',
+    },
+    footerLoader: {
+        paddingVertical: 10,
         alignItems: 'center',
     },
 });

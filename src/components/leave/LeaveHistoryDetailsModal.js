@@ -2,10 +2,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator, Image, Alert, Share } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLeaveStore from '../../store/useLeaveStore';
+import useTeamLeaveStore from '../../store/useTeamLeaveStore';
+import useManagerStore from '../../store/useManagerStore';
 import WithdrawConfirmationModal from './WithdrawConfirmationModal';
 import AuthService from '../../services/AuthService';
 import LoadingOverlay from '../LoadingOverlay';
 import LeaveAttachmentService from '../../services/LeaveAttachmentService';
+import ApprovalPendingWithSection from './ApprovalPendingWithSection';
 import { formatMinutesToTime } from '../../utils/dateUtils';
 
 const getStatusColor = (status) => {
@@ -24,13 +27,19 @@ const formatDisplayDate = (dateStr) => {
     return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
 };
 
-const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSuccess, isWFH = false, externalLeaveDetails, externalLoadingDetails }) => {
+const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSuccess, onTransferSuccess, isWFH = false, externalLeaveDetails, externalLoadingDetails }) => {
     const leaveStore = useLeaveStore();
+    const teamLeaveStore = useTeamLeaveStore();
     const selectedLeaveDetails = externalLeaveDetails !== undefined ? externalLeaveDetails : leaveStore.selectedLeaveDetails;
     const loadingLeaveDetails = externalLoadingDetails !== undefined ? externalLoadingDetails : leaveStore.loadingLeaveDetails;
-    const { withdrawLeave, fetchPendingLeaves } = leaveStore;
+    const { managers, fetchManagers } = useManagerStore();
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
     const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [isRejecting, setIsRejecting] = useState(false);
+    const [isApproving, setIsApproving] = useState(false);
+    const [selectedManagerId, setSelectedManagerId] = useState(null);
+    const isTeamFlow = externalLeaveDetails !== undefined;
 
     const [overlay, setOverlay] = useState({
         visible: false,
@@ -50,6 +59,17 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
     const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
     const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
 
+    // Fetch managers when modal opens in team flow
+    useEffect(() => {
+        if (visible && isTeamFlow) {
+            AuthService.getUserInfo().then(user => {
+                if (user?.userId) {
+                    fetchManagers(user.userId);
+                }
+            });
+        }
+    }, [visible, isTeamFlow, fetchManagers]);
+
     // Reset overlay state when modal visibility changes to prevent stale popups
     useEffect(() => {
         if (!visible) {
@@ -58,6 +78,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
             setViewImageModal(false);
             setViewedImage(null);
             setLoadingDownloadIndex(null);
+            setIsTransferring(false);
         }
     }, [visible]);
 
@@ -118,7 +139,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         const leaveId = selectedLeaveDetails?.leaveId || (selectedLeaveDetails?.days && selectedLeaveDetails.days[0]?.leaveId) || 0;
         const session = (selectedLeaveDetails?.days && selectedLeaveDetails.days[0]?.session) || "Full Day";
 
-        const res = await withdrawLeave(requestId, leaveId, session, remarks);
+        const res = await leaveStore.withdrawLeave(requestId, leaveId, session, remarks);
 
         setIsWithdrawing(false);
 
@@ -136,7 +157,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                 try {
                     const user = await AuthService.getUserInfo();
                     if (user?.userId) {
-                        await fetchPendingLeaves(user.userId, new Date().getFullYear());
+                        await leaveStore.fetchPendingLeaves(user.userId, new Date().getFullYear());
                     }
                 } catch (err) {
                     // console.error('Refresh error', err);
@@ -148,7 +169,119 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         }
     };
 
-    // The withdraw button logic is now purely based on the tab context passed down via 'showWithdraw'
+    const handleApprove = async () => {
+        setIsApproving(true);
+        const requestId = selectedLeaveDetails?.leaveId || selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+
+        try {
+            let managerId = selectedManagerId;
+            if (!managerId) {
+                const user = await AuthService.getUserInfo();
+                managerId = user?.userId;
+            }
+
+            const res = await teamLeaveStore.approveLeave(requestId, managerId);
+            setIsApproving(false);
+
+            if (res.success) {
+                showSuccess(res.message || "Leave request Approved Successfully", () => {
+                    hideOverlay();
+                    onClose();
+
+                    if (onTransferSuccess) {
+                        onTransferSuccess();
+                    } else if (isTeamFlow) {
+                        AuthService.getUserInfo().then(userInfo => {
+                            const mail = userInfo?.mail || userInfo?.email;
+                            if (mail) {
+                                teamLeaveStore.fetchPendingLeaves(mail, new Date().getFullYear());
+                            }
+                        });
+                    }
+                });
+            } else {
+                showError(res.message);
+            }
+        } catch (error) {
+            setIsApproving(false);
+            showError("Failed to approve leave request");
+        }
+    };
+
+    const handleReject = async (remarks) => {
+        setIsRejecting(true);
+        const requestId = selectedLeaveDetails?.leaveId || selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+
+        try {
+            let managerId = selectedManagerId;
+            if (!managerId) {
+                const user = await AuthService.getUserInfo();
+                managerId = user?.userId;
+            }
+
+            const res = await teamLeaveStore.rejectLeave(requestId, managerId, remarks);
+            setIsRejecting(false);
+            setShowWithdrawModal(false);
+
+            if (res.success) {
+                showSuccess("Leave request Rejected Successfully", () => {
+                    hideOverlay();
+                    onClose();
+
+                    if (onTransferSuccess) {
+                        onTransferSuccess();
+                    } else if (isTeamFlow) {
+                        AuthService.getUserInfo().then(userInfo => {
+                            const mail = userInfo?.mail || userInfo?.email;
+                            if (mail) {
+                                teamLeaveStore.fetchPendingLeaves(mail, new Date().getFullYear());
+                            }
+                        });
+                    }
+                });
+            } else {
+                setShowWithdrawModal(false);
+                showError(res.message);
+            }
+        } catch (error) {
+            setIsRejecting(false);
+            setShowWithdrawModal(false);
+            showError("Failed to reject leave request");
+        }
+    };
+
+    const handleTransfer = async (managerId) => {
+        setIsTransferring(true);
+        const requestId = selectedLeaveDetails?.leaveId || selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+
+        try {
+            const res = await teamLeaveStore.transferLeave(requestId, managerId);
+            setIsTransferring(false);
+            if (res.success) {
+                showSuccess("Leave request Transferred Successfully", () => {
+                    hideOverlay();
+                    onClose();
+
+                    if (onTransferSuccess) {
+                        onTransferSuccess();
+                    } else if (isTeamFlow) {
+                        // Fallback: manually fetch if no callback provided
+                        AuthService.getUserInfo().then(userInfo => {
+                            const mail = userInfo?.mail || userInfo?.email;
+                            if (mail) {
+                                teamLeaveStore.fetchPendingLeaves(mail, new Date().getFullYear());
+                            }
+                        });
+                    }
+                });
+            } else {
+                showError(res.message);
+            }
+        } catch (error) {
+            setIsTransferring(false);
+            showError("Failed to transfer leave request");
+        }
+    };
 
     return (
         <Modal
@@ -185,11 +318,22 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                             </View>
 
                             {/* Employee Name */}
-                            {(selectedLeaveDetails.userName || selectedLeaveDetails.name) && (
+                            {externalLeaveDetails !== undefined && (selectedLeaveDetails.userName || selectedLeaveDetails.name) && (
                                 <View style={styles.detailRow}>
                                     <Text style={styles.detailLabel}>Employee Name</Text>
                                     <Text style={styles.detailValue}>{selectedLeaveDetails.userName || selectedLeaveDetails.name}</Text>
                                 </View>
+                            )}
+
+                            {/* Manager Transfer Section for Team Flow */}
+                            {isTeamFlow && selectedLeaveDetails.status?.toLowerCase() === 'pending' && (
+                                <ApprovalPendingWithSection
+                                    managers={managers}
+                                    onTransfer={handleTransfer}
+                                    onManagerSelect={(id) => setSelectedManagerId(id)}
+                                    isLoading={isTransferring}
+                                    currentManagerName={selectedLeaveDetails.reviewByName}
+                                />
                             )}
 
                             {isWFH && (
@@ -260,7 +404,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                             </View>
 
                             {/* Withdraw reason */}
-                            {!showWithdraw && (
+                            {!showWithdraw && externalLeaveDetails == undefined && (
                                 <View style={styles.reasonBlock}>
                                     <Text style={styles.detailLabel}>Withdraw Comments</Text>
                                     <View style={styles.reasonValueBox}>
@@ -335,16 +479,45 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 </View>
                             )}
 
+                            {/* Approve/Reject Buttons if Team Flow & Pending */}
+                            {isTeamFlow && selectedLeaveDetails.status?.toLowerCase() === 'pending' && (
+                                <View style={styles.teamActionRow}>
+                                    <TouchableOpacity
+                                        style={[styles.teamBtn, styles.rejectBtn]}
+                                        onPress={() => {
+                                            setIsWithdrawing(false); // Ensure we're in reject mode
+                                            setShowWithdrawModal(true);
+                                        }}
+                                    >
+                                        <Text style={styles.rejectText}>REJECT</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.teamBtn, styles.approveBtn]}
+                                        onPress={handleApprove}
+                                        disabled={isApproving}
+                                    >
+                                        {isApproving ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <Text style={styles.approveText}>APPROVE</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
                         </ScrollView>
                     )}
                 </View>
 
-                {/* Withdraw Confirmation Modal */}
+                {/* Confirmation Modal — Reused for Withdraw and Reject */}
                 <WithdrawConfirmationModal
                     visible={showWithdrawModal}
                     onClose={() => setShowWithdrawModal(false)}
-                    onConfirm={handleWithdraw}
-                    isLoading={isWithdrawing}
+                    onConfirm={!showWithdraw ? handleReject : handleWithdraw}
+                    isLoading={isWithdrawing || isRejecting}
+                    title={!showWithdraw ? "Reject Confirmation" : "Withdraw Confirmation"}
+                    message={!showWithdraw ? "Are you sure you want to reject this ?" : "Are you sure you want to withdraw this request?"}
+                    confirmText="Confirm"
                 />
 
                 <LoadingOverlay {...overlay} />
@@ -369,7 +542,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 <Image
                                     source={{ uri: `data:image/png;base64,${viewedImage}` }}
                                     style={styles.viewedImage}
-                                    resizeMode="contain"
+                                    resizeMode='contain'
                                 />
                             ) : (
                                 <ActivityIndicator size="large" color="#3b82f6" />
@@ -567,7 +740,6 @@ const styles = StyleSheet.create({
     attachmentActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
     },
     attachmentActionBtn: {
         padding: 8,
@@ -595,8 +767,8 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     viewedImage: {
-        width: '90%',
-        height: '80%',
+        width: '100%',
+        height: '100%',
     },
     footerActionRow: {
         marginTop: 20,
@@ -613,6 +785,41 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 14,
+        letterSpacing: 0.5,
+    },
+    teamActionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        paddingHorizontal: 10,
+        gap: 16,
+    },
+    teamBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    rejectBtn: {
+        backgroundColor: '#f3f0f0ff',
+        borderWidth: 1,
+        borderColor: '#f22121ff',
+    },
+    approveBtn: {
+        backgroundColor: '#348beeff',
+    },
+    rejectText: {
+        color: '#f22121ff',
+        fontWeight: 'bold',
+        fontSize: 15,
+        letterSpacing: 0.5,
+    },
+    approveText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 15,
         letterSpacing: 0.5,
     },
 });

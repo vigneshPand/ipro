@@ -124,6 +124,100 @@ class LeaveService {
             throw error;
         }
     }
+
+    async getManagersDropDown(requestingUserId) {
+        try {
+            const response = await apiClient.get('/regularizationRecord/getManagersDropDown', {
+                params: { requestingUserId, managersOnly: true }
+            });
+            // Assume response is array of { userId, displayName, mail }
+            return response.data;
+        } catch (error) {
+            console.error('getManagersDropDown Error:', error);
+            return [];
+        }
+    }
+
+    async transferLeave(requestId, managerId) {
+        try {
+            const response = await apiClient.put(
+                '/leave/transferTo',
+                null,
+                {
+                    params: {
+                        requestId,
+                        managerId
+                    }
+                }
+            );
+
+            return {
+                success: true,
+                message: response?.data?.message || 'Transferred Successfully'
+            };
+        } catch (error) {
+            console.error('transferLeave Error:', error);
+            return {
+                success: false,
+                message:
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    'Error transferring leave'
+            };
+        }
+    }
+
+    async approveLeave(requestId, managerId) {
+        try {
+            const response = await apiClient.put(
+                '/leave/approve',
+                null,
+                {
+                    params: {
+                        requestId,
+                        managerId,
+                        remarks: '' // No remarks for approval
+                    }
+                }
+            );
+            return {
+                success: true,
+                message: response?.data?.message || 'Approved Successfully'
+            };
+        } catch (error) {
+            console.error('approveLeave Error:', error);
+            return {
+                success: false,
+                message: error?.response?.data?.message || error?.message || 'Error approving leave'
+            };
+        }
+    }
+
+    async rejectLeave(requestId, managerId, remarks) {
+        try {
+            const response = await apiClient.put(
+                '/leave/approve',
+                null,
+                {
+                    params: {
+                        requestId,
+                        managerId,
+                        remarks
+                    }
+                }
+            );
+            return {
+                success: true,
+                message: response?.data?.message || 'Rejected Successfully'
+            };
+        } catch (error) {
+            console.error('rejectLeave Error:', error);
+            return {
+                success: false,
+                message: error?.response?.data?.message || error?.message || 'Error rejecting leave'
+            };
+        }
+    }
 }
 
 export default new LeaveService();

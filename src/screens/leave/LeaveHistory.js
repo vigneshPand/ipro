@@ -177,7 +177,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
 
             {/* Tab Content */}
             {activeTab === 'Pending' ? (
-                loadingPending && !refreshing ? (
+                loadingPending && !refreshing && pendingLeaves.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -197,7 +197,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={loadingPending ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -208,10 +208,17 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
                         }
+                        ListFooterComponent={
+                            loadingPending && pendingLeaves.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
+                        }
                     />
                 )
             ) : (
-                historyLoading && !refreshing ? (
+                historyLoading && !refreshing && historyLeaves.length === 0 ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.blue} />
                     </View>
@@ -226,7 +233,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                             />
                         )}
                         contentContainerStyle={styles.listContent}
-                        ListEmptyComponent={renderEmpty}
+                        ListEmptyComponent={historyLoading ? null : renderEmpty}
                         showsVerticalScrollIndicator={false}
                         onEndReachedThreshold={0.5}
                         onEndReached={handleEndReached}
@@ -236,6 +243,13 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         removeClippedSubviews={true}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} tintColor={COLORS.blue} />
+                        }
+                        ListFooterComponent={
+                            historyLoading && historyLeaves.length > 0 && !refreshing ? (
+                                <View style={styles.footerLoader}>
+                                    <ActivityIndicator size="small" color={COLORS.blue} />
+                                </View>
+                            ) : null
                         }
                     />
                 )
@@ -324,7 +338,11 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    }
+    },
+    footerLoader: {
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
 });
 
 export default LeaveHistoryScreen;
