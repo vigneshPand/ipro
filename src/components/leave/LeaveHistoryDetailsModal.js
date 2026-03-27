@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, ActivityIndicator, Image, Alert, Share } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLeaveStore from '../../store/useLeaveStore';
 import WithdrawConfirmationModal from './WithdrawConfirmationModal';
 import AuthService from '../../services/AuthService';
 import LoadingOverlay from '../LoadingOverlay';
+import LeaveAttachmentService from '../../services/LeaveAttachmentService';
 import { formatMinutesToTime } from '../../utils/dateUtils';
 
 const getStatusColor = (status) => {
@@ -23,8 +24,11 @@ const formatDisplayDate = (dateStr) => {
     return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
 };
 
-const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSuccess, isWFH = false }) => {
-    const { selectedLeaveDetails, loadingLeaveDetails, withdrawLeave, fetchPendingLeaves } = useLeaveStore();
+const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSuccess, isWFH = false, externalLeaveDetails, externalLoadingDetails }) => {
+    const leaveStore = useLeaveStore();
+    const selectedLeaveDetails = externalLeaveDetails !== undefined ? externalLeaveDetails : leaveStore.selectedLeaveDetails;
+    const loadingLeaveDetails = externalLoadingDetails !== undefined ? externalLoadingDetails : leaveStore.loadingLeaveDetails;
+    const { withdrawLeave, fetchPendingLeaves } = leaveStore;
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
     const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -36,6 +40,12 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         onCancel: null
     });
 
+    // Attachment view/download states
+    const [viewImageModal, setViewImageModal] = useState(false);
+    const [viewedImage, setViewedImage] = useState(null);
+    const [loadingViewIndex, setLoadingViewIndex] = useState(null);
+    const [loadingDownloadIndex, setLoadingDownloadIndex] = useState(null);
+
     const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
     const showSuccess = useCallback((message, onConfirm = hideOverlay) => setOverlay({ visible: true, message, type: 'success', onConfirm }), [hideOverlay]);
     const showError = useCallback((message) => setOverlay({ visible: true, message, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
@@ -45,8 +55,61 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         if (!visible) {
             setOverlay({ visible: false, message: '', type: 'loading', onConfirm: null, onCancel: null });
             setShowWithdrawModal(false);
+            setViewImageModal(false);
+            setViewedImage(null);
+            setLoadingDownloadIndex(null);
         }
     }, [visible]);
+
+    // ─── Handle View Attachment ───
+    const handleViewAttachment = useCallback(async (attachmentIndex) => {
+        setLoadingViewIndex(attachmentIndex);
+        try {
+            const requestId = selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+            if (!requestId) {
+                Alert.alert('Error', 'Unable to retrieve request ID');
+                setLoadingViewIndex(null);
+                return;
+            }
+
+            const base64Image = await LeaveAttachmentService.viewAttachment(requestId, attachmentIndex);
+            setViewedImage(base64Image);
+            setViewImageModal(true);
+        } catch (error) {
+            Alert.alert('Error', error?.message || 'Failed to load attachment');
+            console.error('View attachment error:', error);
+        } finally {
+            setLoadingViewIndex(null);
+        }
+    }, [selectedLeaveDetails]);
+
+    // ─── Handle Download Attachment ───
+    const handleDownloadAttachment = useCallback(async (attachmentIndex, fileName) => {
+        setLoadingDownloadIndex(attachmentIndex);
+        try {
+            const requestId = selectedLeaveDetails?.id || selectedLeaveDetails?.requestId;
+            if (!requestId) {
+                Alert.alert('Error', 'Unable to retrieve request ID');
+                setLoadingDownloadIndex(null);
+                return;
+            }
+
+            const result = await LeaveAttachmentService.downloadAttachment(
+                requestId,
+                attachmentIndex,
+                fileName
+            );
+
+            if (result?.success) {
+                showSuccess(result.message || 'File downloaded successfully', hideOverlay);
+            }
+        } catch (error) {
+            console.error('Download attachment error:', error);
+            showError(error?.message || 'Failed to download attachment');
+        } finally {
+            setLoadingDownloadIndex(null);
+        }
+    }, [selectedLeaveDetails, showSuccess, showError, hideOverlay]);
 
 
     const handleWithdraw = async (remarks) => {
@@ -121,6 +184,14 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 </View>
                             </View>
 
+                            {/* Employee Name */}
+                            {(selectedLeaveDetails.userName || selectedLeaveDetails.name) && (
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Employee Name</Text>
+                                    <Text style={styles.detailValue}>{selectedLeaveDetails.userName || selectedLeaveDetails.name}</Text>
+                                </View>
+                            )}
+
                             {isWFH && (
                                 <View style={styles.detailRow}>
                                     <Text style={styles.detailLabel}>Request Id</Text>
@@ -157,18 +228,26 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 </View>
                             )}
 
-                            {/* Leave Dates */}
+                            {/* Leave Dates / Duration */}
                             {selectedLeaveDetails.days && selectedLeaveDetails.days.length > 0 && (
                                 <View style={styles.sectionBlock}>
                                     <Text style={styles.sectionTitle}>Duration</Text>
-                                    {selectedLeaveDetails.days.map((day, index) => (
-                                        <View key={index} style={styles.dayRow}>
-                                            <Text style={styles.dayDate}>{formatDisplayDate(day.date)}</Text>
-                                            <View style={styles.sessionBadge}>
-                                                <Text style={styles.sessionBadgeText}>{day.session}</Text>
+                                    {externalLeaveDetails !== undefined ? (
+                                        // Team flow: Show date range format
+                                        <Text style={styles.durationRange}>
+                                            {formatDisplayDate(selectedLeaveDetails.days[0].date)} - {formatDisplayDate(selectedLeaveDetails.days[selectedLeaveDetails.days.length - 1].date)}
+                                        </Text>
+                                    ) : (
+                                        // Employee flow: Show individual days with sessions
+                                        selectedLeaveDetails.days.map((day, index) => (
+                                            <View key={index} style={styles.dayRow}>
+                                                <Text style={styles.dayDate}>{formatDisplayDate(day.date)}</Text>
+                                                <View style={styles.sessionBadge}>
+                                                    <Text style={styles.sessionBadgeText}>{day.session}</Text>
+                                                </View>
                                             </View>
-                                        </View>
-                                    ))}
+                                        ))
+                                    )}
                                 </View>
                             )}
 
@@ -208,10 +287,39 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                                 <Text style={styles.sectionTitle}>Attachments</Text>
                                 {selectedLeaveDetails.attachments && selectedLeaveDetails.attachments.length > 0 ? (
                                     selectedLeaveDetails.attachments.map((att, index) => (
-                                        <TouchableOpacity key={index} style={styles.attachmentBtn}>
-                                            <Icon name="paperclip" size={16} color="#3b82f6" />
-                                            <Text style={styles.attachmentText}>{att.fileName || `Attachment ${index + 1}`}</Text>
-                                        </TouchableOpacity>
+                                        <View key={index} style={styles.attachmentRow}>
+                                            <View style={styles.attachmentNameContainer}>
+                                                <Icon name="paperclip" size={16} color="#3b82f6" />
+                                                <Text style={styles.attachmentName}>{att.name || att.fileName || `Attachment ${index + 1}`}</Text>
+                                            </View>
+                                            <View style={styles.attachmentActions}>
+                                                {/* View Icon */}
+                                                <TouchableOpacity
+                                                    style={styles.attachmentActionBtn}
+                                                    onPress={() => handleViewAttachment(index)}
+                                                    disabled={loadingViewIndex === index}
+                                                >
+                                                    {loadingViewIndex === index ? (
+                                                        <ActivityIndicator size="small" color="#3b82f6" />
+                                                    ) : (
+                                                        <Icon name="eye" size={18} color="#3b82f6" />
+                                                    )}
+                                                </TouchableOpacity>
+
+                                                {/* Download Icon */}
+                                                <TouchableOpacity
+                                                    style={styles.attachmentActionBtn}
+                                                    onPress={() => handleDownloadAttachment(index, att.name || att.fileName)}
+                                                    disabled={loadingDownloadIndex === index}
+                                                >
+                                                    {loadingDownloadIndex === index ? (
+                                                        <ActivityIndicator size="small" color="#10b981" />
+                                                    ) : (
+                                                        <Icon name="download" size={18} color="#10b981" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
                                     ))
                                 ) : (
                                     <Text style={styles.noAttachmentText}>No attachments</Text>
@@ -240,6 +348,35 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                 />
 
                 <LoadingOverlay {...overlay} />
+
+                {/* Image View Modal */}
+                <Modal
+                    visible={viewImageModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setViewImageModal(false)}
+                >
+                    <View style={styles.imageModalOverlay}>
+                        <View style={styles.imageModalContent}>
+                            <TouchableOpacity
+                                style={styles.imageCloseBtn}
+                                onPress={() => setViewImageModal(false)}
+                            >
+                                <Icon name="close" size={28} color="#fff" />
+                            </TouchableOpacity>
+
+                            {viewedImage ? (
+                                <Image
+                                    source={{ uri: `data:image/png;base64,${viewedImage}` }}
+                                    style={styles.viewedImage}
+                                    resizeMode="contain"
+                                />
+                            ) : (
+                                <ActivityIndicator size="large" color="#3b82f6" />
+                            )}
+                        </View>
+                    </View>
+                </Modal>
             </View>
         </Modal>
     );
@@ -336,6 +473,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 8,
     },
+    durationRange: {
+        fontSize: 14,
+        color: '#1f2937',
+        fontWeight: '500',
+        marginTop: 4,
+    },
     dayRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -395,21 +538,65 @@ const styles = StyleSheet.create({
         color: '#92400e',
         fontWeight: '500',
     },
-    attachmentBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 6,
-    },
-    attachmentText: {
-        marginLeft: 6,
-        color: '#3b82f6',
-        fontSize: 14,
-        fontWeight: '500',
-    },
     noAttachmentText: {
         fontSize: 13,
         color: '#9ca3af',
         fontStyle: 'italic',
+    },
+    attachmentRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        backgroundColor: '#f9fafb',
+        borderRadius: 8,
+        marginBottom: 6,
+    },
+    attachmentNameContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    attachmentName: {
+        marginLeft: 8,
+        fontSize: 13,
+        color: '#374151',
+        fontWeight: '500',
+    },
+    attachmentActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    attachmentActionBtn: {
+        padding: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imageModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imageModalContent: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    imageCloseBtn: {
+        position: 'absolute',
+        top: 40,
+        right: 20,
+        zIndex: 10,
+        padding: 8,
+    },
+    viewedImage: {
+        width: '90%',
+        height: '80%',
     },
     footerActionRow: {
         marginTop: 20,

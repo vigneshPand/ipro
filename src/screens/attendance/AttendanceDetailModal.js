@@ -175,7 +175,7 @@ const AttendanceDetailModal = ({
 
     // ─── Modal Header Icons (ONLY place icons appear) ───
     // 1. Leave Approval Pending: leaveStatus === "Pending" → show ⚠️
-    const showLeaveApprovalPending = raw.leaveStatus === 'Pending';
+    const showLeaveApprovalPending = raw.leaveStatus === 'Pending' || raw.permissionStatus === 'Pending';
     // 2. Regularization Approval Pending: regularizationStatus === true
     const showRegularization = raw.regularizationStatus === true;
     // 3. WFH Approval Pending: wfhStatus === "Pending"
@@ -201,9 +201,11 @@ const AttendanceDetailModal = ({
     const isWithin3Days = selectedDate <= today && selectedDate >= threeDaysAgo;
 
     // Show withdraw icon if it's a leave case (has leaveType or Leave status)
-    const isLeaveCase = !!(raw.leaveType || raw.status === 'Leave' || raw.leaveStatus);
+    const isLeaveCase = !!(raw.leaveType || raw.status === 'Leave' || raw.leaveStatus || raw.permissionStatus === 'Pending' || raw.permissionMinutes != null && raw.permissionMinutes !== '');
     const isAlreadyWithdrawn = raw.leaveStatus === 'Withdraw';
     const showWithdrawAction = isLeaveCase && !isAlreadyWithdrawn;
+
+    console.log('showWithdrawAction', showWithdrawAction);
 
     const handleWithdrawClick = (type = 'leave') => {
         if (isWithin3Days) {
@@ -211,7 +213,7 @@ const AttendanceDetailModal = ({
             setWithdrawModalVisible(true);
         } else {
             setWithdrawTooltipVisible(true);
-            setTimeout(() => setWithdrawTooltipVisible(false), 2500);
+            setTimeout(() => setWithdrawTooltipVisible(false), 3500);
         }
     };
 
@@ -513,6 +515,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         flexDirection: 'row',
         gap: 4,
+        marginRight: 4,
         borderWidth: 1,
         borderColor: COLORS.red,
         padding: 4,

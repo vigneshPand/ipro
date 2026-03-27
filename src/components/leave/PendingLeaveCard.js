@@ -8,7 +8,7 @@ const formatDate = (dateStr) => {
     return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
 };
 
-const PendingLeaveCard = ({ type, days, status, pendingWith, startDate, endDate, onPress }) => {
+const PendingLeaveCard = ({ userName, type, days, status, pendingWith, startDate, endDate, onPress }) => {
     const isPermission = type === 'Permission';
 
     return (
@@ -17,6 +17,7 @@ const PendingLeaveCard = ({ type, days, status, pendingWith, startDate, endDate,
             status={status}
             onPress={onPress}
             details={[
+                ...(userName ? [{ label: 'Employee Name:', value: userName }] : []),
                 { label: isPermission ? 'Date:' : 'Start Date:', value: formatDate(startDate) },
                 ...(isPermission ? [] : [{ label: 'End Date:', value: formatDate(endDate) }]),
                 { label: isPermission ? 'No of Hours:' : 'No of Days:', value: isPermission ? formatMinutesToTime(days * 60) : days },

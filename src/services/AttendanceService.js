@@ -50,6 +50,22 @@ class AttendanceService {
             params: { date },
         });
     }
+
+    // --- Manager Team Dashboard APIs ---
+
+    // 1. Team Summary Cards API
+    async getTeamSummary(email) {
+        return await apiClient.get('/userActivity/currentDayStatusGroupWise', {
+            params: { email }
+        });
+    }
+
+    // 2. Team Activity API
+    async getTeamActivity(email) {
+        return await apiClient.get('/userActivity/teamActivity', {
+            params: { email }
+        });
+    }
 }
 
 export default new AttendanceService();

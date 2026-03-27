@@ -24,8 +24,12 @@ import { COLORS, SHADOW } from '../utils/theme';
 import { calculateDistance } from '../utils/LocationHelper';
 import LoadingOverlay from '../components/LoadingOverlay';
 import WFHCheckInConfirmModal from '../components/common/WFHCheckInConfirmModal';
+import useRoleStore from '../store/useRoleStore';
+import SummaryCard from '../components/dashboard/SummaryCard';
+import TeamActivityItem from '../components/dashboard/TeamActivityItem';
 
 const HomeScreen = ({ route, navigation }) => {
+    const { hasManagerRole, activeTab, setActiveTab, fetchRoles } = useRoleStore();
     const userName = route?.params?.userName || route?.params?.displayName;
     const [currentTime, setCurrentTime] = useState(moment());
     const [remarks, setRemarks] = useState('');
@@ -52,6 +56,12 @@ const HomeScreen = ({ route, navigation }) => {
     const [selectedWorkMode, setSelectedWorkMode] = useState(null);
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Team Dashboard State
+    const [teamSummary, setTeamSummary] = useState(null);
+    const [teamActivity, setTeamActivity] = useState([]);
+    const [teamLoading, setTeamLoading] = useState(false);
+    const [teamError, setTeamError] = useState(null);
 
     // WFH Confirmation Modal State
     const [showWFHModal, setShowWFHModal] = useState(false);
@@ -91,6 +101,8 @@ const HomeScreen = ({ route, navigation }) => {
                 if (!isRefreshing) hideOverlay();
                 return;
             }
+
+            await fetchRoles(userInfo.userId);
 
             const today = moment().format('YYYY-MM-DD');
 
@@ -143,12 +155,53 @@ const HomeScreen = ({ route, navigation }) => {
             if (isRefreshing) setRefreshing(false);
             else hideOverlay();
         }
-    }, [showLoading, hideOverlay, showError]);
+    }, [showLoading, hideOverlay, showError, fetchRoles]);
+
+    const fetchTeamData = React.useCallback(async (isRefreshing = false) => {
+        // Avoid duplicate calls unless refreshing
+        if (!isRefreshing && (teamSummary || teamActivity.length > 0)) return;
+
+        if (!isRefreshing) setTeamLoading(true);
+        setTeamError(null);
+
+        try {
+            const userInfo = await AuthService.getUserInfo();
+            const email = userInfo?.mail;
+            if (!email) {
+                setTeamError('User email not found');
+                return;
+            }
+
+            const [summaryRes, activityRes] = await Promise.all([
+                AttendanceService.getTeamSummary(email),
+                AttendanceService.getTeamActivity(email)
+            ]);
+
+            setTeamSummary(summaryRes.data);
+            setTeamActivity(activityRes.data || []);
+        } catch (error) {
+            console.error('Fetch Team Data Error:', error);
+            setTeamError(error.message || 'Failed to fetch team data');
+        } finally {
+            setTeamLoading(false);
+            if (isRefreshing) setRefreshing(false);
+        }
+    }, [teamSummary, teamActivity]);
+
+    useEffect(() => {
+        if (activeTab === 'Team') {
+            fetchTeamData();
+        }
+    }, [activeTab, fetchTeamData]);
 
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);
-        fetchInitialData(true);
-    }, [fetchInitialData]);
+        if (activeTab === 'Self') {
+            fetchInitialData(true);
+        } else {
+            fetchTeamData(true);
+        }
+    }, [activeTab, fetchInitialData, fetchTeamData]);
 
 
     const requestLocationPermission = async () => {
@@ -369,80 +422,168 @@ const HomeScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* Attendance Card */}
-                <View style={styles.card}>
-                    <View style={styles.cardTop}>
-                        <View>
-                            <Text style={styles.timeText}>{currentTime.format('hh : mm : ss A')}</Text>
-                            <Text style={styles.dateText}>{currentTime.format('ddd, MMM DD, YYYY')}</Text>
-                            <Text style={styles.shiftText}>Shift: General (10:00 AM - 7:00 PM)</Text>
-                        </View>
-                        <Icons name="calendar-clock" size={35} color={COLORS.primary} />
+                {hasManagerRole && (
+                    <View style={styles.tabContainer}>
+                        <TouchableOpacity
+                            style={[styles.tab, activeTab === 'Self' && styles.activeTab]}
+                            onPress={() => setActiveTab('Self')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'Self' && styles.activeTabText]}>Self</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.tab, activeTab === 'Team' && styles.activeTab]}
+                            onPress={() => setActiveTab('Team')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'Team' && styles.activeTabText]}>Team</Text>
+                        </TouchableOpacity>
                     </View>
+                )}
 
-                    {locationStatusMessage ? (
-                        <View style={styles.infoBox}>
-                            <Icon name="information-outline" size={22} color={COLORS.primary} />
-                            <Text style={styles.infoText}>{locationStatusMessage}</Text>
-                        </View>
-                    ) : (
-                        <View style={styles.cardBottom}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Remarks"
-                                placeholderTextColor="#999"
-                                value={remarks}
-                                onChangeText={setRemarks}
-                            />
-                            <TouchableOpacity
-                                style={[styles.button, showCheckInButton ? styles.checkInBtn : styles.checkOutBtn]}
-                                onPress={handleAttendanceClick}
-                                disabled={overlay.visible}
-                            >
-                                <Text style={styles.buttonText}>
-                                    {showCheckInButton ? 'Check In' : 'Check Out'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-                {/* Today's Activity Card */}
-                <View style={[styles.card, styles.activityCard]}>
-                    <Text style={styles.activityTitle}>Today's Activity</Text>
-
-                    {todayActivity.length === 0 ? (
-                        <Text style={styles.emptyText}>No activity recorded yet today.</Text>
-                    ) : (
-                        [...todayActivity]?.map((item, index) => (
-                            <View key={item.id || index} style={styles.activityItem}>
-                                <View style={styles.activityIconWrapper}>
-                                    <View style={[styles.statusDot, item.currStatus ? styles.dotIn : styles.dotOut]} />
-                                    {index !== todayActivity.length - 1 && <View style={styles.timelineConnector} />}
+                {activeTab === 'Self' ? (
+                    <>
+                        {/* Attendance Card */}
+                        <View style={styles.card}>
+                            <View style={styles.cardTop}>
+                                <View>
+                                    <Text style={styles.timeText}>{currentTime.format('hh : mm : ss A')}</Text>
+                                    <Text style={styles.dateText}>{currentTime.format('ddd, MMM DD, YYYY')}</Text>
+                                    <Text style={styles.shiftText}>Shift: General (10:00 AM - 7:00 PM)</Text>
                                 </View>
-                                <View style={styles.activityDetails}>
-                                    <View style={styles.activityRow}>
-                                        <Text style={[styles.activityStatus, item.currStatus ? styles.textIn : styles.textOut]}>
-                                            {item.currStatus ? 'Check In' : 'Check Out'}
+                                <Icons name="calendar-clock" size={35} color={COLORS.primary} />
+                            </View>
+
+                            {locationStatusMessage ? (
+                                <View style={styles.infoBox}>
+                                    <Icon name="information-outline" size={22} color={COLORS.primary} />
+                                    <Text style={styles.infoText}>{locationStatusMessage}</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.cardBottom}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Remarks"
+                                        placeholderTextColor="#999"
+                                        value={remarks}
+                                        onChangeText={setRemarks}
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.button, showCheckInButton ? styles.checkInBtn : styles.checkOutBtn]}
+                                        onPress={handleAttendanceClick}
+                                        disabled={overlay.visible}
+                                    >
+                                        <Text style={styles.buttonText}>
+                                            {showCheckInButton ? 'Check In' : 'Check Out'}
                                         </Text>
-                                        <Text style={styles.activityTime}>
-                                            {item.time ? moment(item.time, 'HH:mm:ss').format('hh:mm A') : ''}
-                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+                        {/* Today's Activity Card */}
+                        <View style={[styles.card, styles.activityCard]}>
+                            <Text style={styles.activityTitle}>Today's Activity</Text>
+
+                            {todayActivity.length === 0 ? (
+                                <Text style={styles.emptyText}>No activity recorded yet today.</Text>
+                            ) : (
+                                [...todayActivity]?.map((item, index) => (
+                                    <View key={item.id || index} style={styles.activityItem}>
+                                        <View style={styles.activityIconWrapper}>
+                                            <View style={[styles.statusDot, item.currStatus ? styles.dotIn : styles.dotOut]} />
+                                            {index !== todayActivity.length - 1 && <View style={styles.timelineConnector} />}
+                                        </View>
+                                        <View style={styles.activityDetails}>
+                                            <View style={styles.activityRow}>
+                                                <Text style={[styles.activityStatus, item.currStatus ? styles.textIn : styles.textOut]}>
+                                                    {item.currStatus ? 'Check In' : 'Check Out'}
+                                                </Text>
+                                                <Text style={styles.activityTime}>
+                                                    {item.time ? moment(item.time, 'HH:mm:ss').format('hh:mm A') : ''}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.activityLocationRow}>
+                                                <Icons
+                                                    name={item.workMode === 'Office' ? 'office-building' : item.workMode === 'Home' ? 'home' : 'account-group'}
+                                                    size={14}
+                                                    color="#666"
+                                                />
+                                            </View>
+                                        </View>
                                     </View>
-                                    <View style={styles.activityLocationRow}>
-                                        <Icons
-                                            name={item.workMode === 'Office' ? 'office-building' : item.workMode === 'Home' ? 'home' : 'account-group'}
-                                            size={14}
-                                            color="#666"
-                                        />
-                                        {/* <Text style={styles.activityLocationText}>
-                                            {item.workMode} • {item.location}
-                                        </Text> */}
-                                    </View>
+                                ))
+                            )}
+                        </View>
+                    </>
+                ) : (
+                    <View style={styles.teamDashboard}>
+                        {/* Skeleton Loaders / Loading View */}
+                        {teamLoading && !teamSummary ? (
+                            <View style={styles.loadingContainer}>
+                                <View style={styles.cardGrid}>
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                        <View key={i} style={[styles.skeletonCard, i === 5 && styles.fullWidthSkeleton]} />
+                                    ))}
                                 </View>
                             </View>
-                        ))
-                    )}
-                </View>
+                        ) : teamError ? (
+                            <View style={styles.errorContainer}>
+                                <Icons name="alert-circle-outline" size={50} color={COLORS.error} />
+                                <Text style={styles.errorText}>{teamError}</Text>
+                                <TouchableOpacity style={styles.retryBtn} onPress={() => fetchTeamData(true)}>
+                                    <Text style={styles.retryBtnText}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <>
+                                {/* Summary Cards Grid */}
+                                <View style={styles.cardGrid}>
+                                    <SummaryCard
+                                        label="Total Employees"
+                                        value={teamSummary?.totalTeamMember}
+                                        color={COLORS.primary}
+                                        icon="users"
+                                    />
+                                    <SummaryCard
+                                        label="Checked In"
+                                        value={teamSummary?.checkIn}
+                                        color={COLORS.success}
+                                        icon="check-square"
+                                    />
+                                    <SummaryCard
+                                        label="Pending"
+                                        value={teamSummary?.pending}
+                                        color="#f39c12"
+                                        icon="exclamation-circle"
+                                    />
+                                    <SummaryCard
+                                        label="On Leave"
+                                        value={teamSummary?.onLeave}
+                                        color={COLORS.error}
+                                        icon="calendar-times-o"
+                                    />
+                                    <SummaryCard
+                                        label="Checked Out"
+                                        value={teamSummary?.checkOut}
+                                        color="#9b59b6"
+                                        isFullWidth
+                                        icon="sign-out"
+                                    />
+                                </View>
+
+                                {/* Team Activity Section */}
+                                <View style={styles.teamActivitySection}>
+                                    <Text style={styles.activityTitle}>Team Activity</Text>
+                                    {teamActivity.length === 0 ? (
+                                        <Text style={styles.emptyText}>No team activity found for today.</Text>
+                                    ) : (
+                                        teamActivity.map((item, index) => (
+                                            <TeamActivityItem key={item.id || index} item={item} />
+                                        ))
+                                    )}
+                                </View>
+                            </>
+                        )}
+                    </View>
+                )}
             </ScrollView>
 
             <Modal visible={showLocationModal} transparent animationType="slide">
@@ -580,7 +721,82 @@ const styles = StyleSheet.create({
     },
     pb: {
         paddingBottom: 10
-    }
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#e6ecf2',
+        borderRadius: 25,
+        padding: 4,
+        marginBottom: 15,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 5,
+        alignItems: 'center',
+        borderRadius: 20,
+    },
+    activeTab: {
+        backgroundColor: COLORS.primary,
+        ...SHADOW,
+    },
+    tabText: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#666',
+    },
+    activeTabText: {
+        color: '#fff',
+    },
+    teamDashboard: {
+        flex: 1,
+    },
+    cardGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    teamActivitySection: {
+        marginTop: 10,
+    },
+    loadingContainer: {
+        flex: 1,
+    },
+    skeletonCard: {
+        backgroundColor: '#e1e9ee',
+        borderRadius: 15,
+        height: 80,
+        width: '48%',
+        marginBottom: 12,
+    },
+    fullWidthSkeleton: {
+        width: '100%',
+    },
+    errorContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        backgroundColor: '#fff',
+        borderRadius: 15,
+        ...SHADOW,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#666',
+        marginTop: 10,
+        textAlign: 'center',
+    },
+    retryBtn: {
+        marginTop: 20,
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 30,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    retryBtnText: {
+        color: '#fff',
+        fontWeight: 'bold',
+    },
 });
 
 export default HomeScreen;

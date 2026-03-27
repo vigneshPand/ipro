@@ -10,6 +10,7 @@ const formatDate = (dateStr) => {
 
 const HistoryLeaveCard = ({ item, onPress }) => {
     const isPermission = item.type === 'Permission';
+    const userName = item.userName || item.name;
 
     return (
         <CommonHistoryCard
@@ -17,6 +18,7 @@ const HistoryLeaveCard = ({ item, onPress }) => {
             status={item.status}
             onPress={() => onPress(item)}
             details={[
+                ...(userName ? [{ label: 'Employee Name:', value: userName }] : []),
                 { label: isPermission ? 'Date:' : 'Start Date:', value: formatDate(item.startDate) },
                 ...(isPermission ? [] : [{ label: 'End Date:', value: formatDate(item.endDate) }]),
                 { label: isPermission ? 'Duration:' : 'No of Days:', value: isPermission ? formatMinutesToTime(item.noOfDays * 60) : item.noOfDays },

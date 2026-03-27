@@ -42,6 +42,8 @@ const LEGEND_COLOR_ITEMS = [
     { label: 'Week-Off (W)', color: '#e6e3e3ff', border: '#e0e0e0' },
     { label: 'Leave', color: '#e3f2fd', border: '#bbdefb' },
     { label: 'Holiday (H)', color: '#f3e5f5', border: '#e1bee7' },
+    { label: 'First Half Leave', color: '#e3f2fd', border: '#bbdefb' },
+    { label: 'Second Half Leave', color: '#e3f2fd', border: '#bbdefb' },
 ];
 // Separate icon-based legend item
 const WFH_APPROVAL_PENDING = 'WFH Approval Pending';
@@ -120,10 +122,11 @@ const AttendanceGridScreen = ({ navigation }) => {
 
         for (let i = 0; i < firstDayOfMonth; i++) {
             gridItems.push({
-                key: `empty-${i}`,
+                key: `leading-${i}`,
                 isEmpty: false,
                 date: prevMonthLastDate - firstDayOfMonth + i + 1,
                 isLeading: true,
+                monthOffset: -1, // ✅ important
             });
         }
 
@@ -140,6 +143,7 @@ const AttendanceGridScreen = ({ navigation }) => {
                 leaveType: data.leaveType || null,
                 leaveStatus: data.leaveStatus || null,
                 permissionMinutes: data.permissionMinutes || null,
+                permissionStatus: data.permissionStatus || null,
                 regularizationStatus: data.regularizationStatus || false,
                 wfhStatus: data.wfhStatus || null,
                 hasPendingOrTransferRegularization:
@@ -160,9 +164,9 @@ const AttendanceGridScreen = ({ navigation }) => {
                 gridItems.push({
                     key: `trail-${i}`,
                     isEmpty: false,
-                    isTrailing: true,   // ✅ mark as trailing
-                    date: i,            // next month dates
-                    isFuture: true,
+                    isTrailing: true,
+                    date: i,
+                    monthOffset: 1, // ✅ important
                 });
             }
         }
@@ -192,16 +196,31 @@ const AttendanceGridScreen = ({ navigation }) => {
     const handleDayPress = useCallback((item) => {
         if (item.isEmpty) return;
 
-        // Card click: Present, WFH Pending, Partial Leave, Permissions, regularizationStatus===true
-        const canPress = !item.isFuture && (
+        const isPermissionPending =
+            item.permissionStatus === 'Pending' ||
+            (item.permissionMinutes != null && item.permissionMinutes !== '');
+
+        const isValidStatus =
             item.status === 'Present' ||
             item.wfhStatus === 'Pending' ||
-            (item.permissionMinutes != null && item.permissionMinutes !== '') ||
-            (item.leaveType && (item.leaveType.toLowerCase() === 'firsthalf' || item.leaveType.toLowerCase() === 'secondhalf')) ||
-            item.regularizationStatus === true
-        );
+            isPermissionPending ||
+            (item.leaveType &&
+                item.leaveType.toLowerCase() === 'leave' &&
+                item.status === 'Pending Approval') ||
+            (item.leaveType &&
+                (item.leaveType.toLowerCase() === 'firsthalf' ||
+                    item.leaveType.toLowerCase() === 'secondhalf')) ||
+            item.regularizationStatus;
+
+        const canPress =
+            !item.isTrailing && // still block next month
+            (
+                (!item.isFuture) || isPermissionPending
+            ) &&
+            isValidStatus;
 
         if (!canPress) return;
+
         setSelectedDay(item);
         setDetailModalVisible(true);
     }, []);
@@ -419,7 +438,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         backgroundColor: COLORS.bg,
         marginHorizontal: 16,
-        marginTop: 12,
+        marginTop: 5,
         borderRadius: 12,
         ...SHADOW,
     },

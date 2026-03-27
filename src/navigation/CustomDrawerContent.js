@@ -7,12 +7,14 @@ import Icons from 'react-native-vector-icons/Octicons';
 import { COLORS } from '../utils/theme';
 import AuthService from '../services/AuthService';
 import LoadingOverlay from '../components/LoadingOverlay';
+import useRoleStore from '../store/useRoleStore';
 
 const CustomDrawerContent = (props) => {
 
     const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
     const [isLeaveExpanded, setIsLeaveExpanded] = useState(false);
     const [userProfile, setUserProfile] = useState(null);
+    const { activeTab } = useRoleStore();
 
     const [overlay, setOverlay] = useState({
         visible: false,
@@ -31,7 +33,8 @@ const CustomDrawerContent = (props) => {
         'LeaveRequest',
         'LeaveHistory',
         'CompOffGrantRequest',
-        'CompOffHistory'
+        'CompOffHistory',
+        'TeamLeaveRequests'
     ].includes(activeRoute);
 
     const isAttendanceSubMenu = [
@@ -110,231 +113,317 @@ const CustomDrawerContent = (props) => {
                 style={styles.drawerScrollView}
             >
 
-                {/* DASHBOARD */}
-                <TouchableOpacity
-                    style={[
-                        styles.menuItem,
-                        activeRoute === 'Home' && styles.activeMenuItem
-                    ]}
-                    onPress={() => navigateTo('Home')}
-                >
-                    <Icon
-                        name="view-dashboard-outline"
-                        size={24}
-                        color={activeRoute === 'Home' ? COLORS.primary : '#fff'}
-                    />
-                    <Text
-                        style={[
-                            styles.menuText,
-                            activeRoute === 'Home' && styles.activeMenuText
-                        ]}
-                    >
-                        Dashboard
-                    </Text>
-                </TouchableOpacity>
-
-                {/* ATTENDANCE */}
-                <TouchableOpacity
-                    style={[
-                        styles.menuItem,
-                        isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
-                        styles.activeMenuItem
-                    ]}
-                    onPress={toggleAttendanceMenu}
-                >
-                    <Icon
-                        name="calendar-month-outline"
-                        size={24}
-                        color={
-                            isParentActive(isAttendanceSubMenu, isAttendanceExpanded)
-                                ? COLORS.primary
-                                : '#fff'
-                        }
-                    />
-
-                    <Text
-                        style={[
-                            styles.menuText,
-                            isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
-                            styles.activeMenuText
-                        ]}
-                    >
-                        Attendance
-                    </Text>
-
-                    <Icon
-                        name={isAttendanceExpanded ? 'chevron-up' : 'chevron-down'}
-                        size={24}
-                        color={
-                            isParentActive(isAttendanceSubMenu, isAttendanceExpanded)
-                                ? COLORS.primary
-                                : '#fff'
-                        }
-                        style={styles.chevronIcon}
-                    />
-                </TouchableOpacity>
-
-                {isAttendanceExpanded && (
-                    <View style={styles.subMenuContainer}>
+                {activeTab === 'Team' && (
+                    <>
                         <TouchableOpacity
                             style={[
-                                styles.subMenuItem,
-                                activeRoute === 'Attendance Grid' && styles.activeSubMenuItem
+                                styles.menuItem,
+                                activeRoute === 'Home' && styles.activeMenuItem
                             ]}
-                            onPress={() => navigateTo('Attendance Grid')}
+                            onPress={() => navigateTo('Home')}
                         >
+                            <Icon
+                                name="view-dashboard-outline"
+                                size={24}
+                                color={activeRoute === 'Home' ? COLORS.primary : '#fff'}
+                            />
                             <Text
                                 style={[
-                                    styles.subMenuText,
-                                    activeRoute === 'Attendance Grid' && styles.activeMenuText
+                                    styles.menuText,
+                                    activeRoute === 'Home' && styles.activeMenuText
                                 ]}
                             >
-                                Attendance Grid
+                                Team Dashboard
                             </Text>
                         </TouchableOpacity>
-
-                        {/* <TouchableOpacity
-                            style={[
-                                styles.subMenuItem,
-                                activeRoute === 'Regularization' && styles.activeSubMenuItem
-                            ]}
-                            onPress={() => navigateTo('Regularization')}
-                        >
-                            <Text
-                                style={[
-                                    styles.subMenuText,
-                                    activeRoute === 'Regularization' && styles.activeMenuText
-                                ]}
-                            >
-                                Regularization
-                            </Text>
-                        </TouchableOpacity> */}
+                        
+                        {/* LEAVE (Manager Mode) */}
                         <TouchableOpacity
                             style={[
-                                styles.subMenuItem,
-                                activeRoute === 'Regularization' && styles.activeSubMenuItem
+                                styles.menuItem,
+                                isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
+                                styles.activeMenuItem
                             ]}
-                            onPress={() => navigateTo('Regularization')}
+                            onPress={toggleLeaveMenu}
                         >
+                            <Icon
+                                name="umbrella-beach-outline"
+                                size={24}
+                                color={isParentActive(isLeaveSubMenu, isLeaveExpanded) ? COLORS.primary : '#fff'}
+                            />
+
                             <Text
                                 style={[
-                                    styles.subMenuText,
-                                    activeRoute === 'Regularization' && styles.activeMenuText
+                                    styles.menuText,
+                                    isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
+                                    styles.activeMenuText
                                 ]}
                             >
-                                Regularization
+                                Leave
                             </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.subMenuItem,
-                                activeRoute === 'WFHRequest' && styles.activeSubMenuItem
-                            ]}
-                            onPress={() => navigateTo('WFHRequest')}
-                        >
-                            <Text
-                                style={[
-                                    styles.subMenuText,
-                                    activeRoute === 'WFHRequest' && styles.activeMenuText
-                                ]}
-                            >
-                                WFH Request
-                            </Text>
+
+                            <Icon
+                                name={isLeaveExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={24}
+                                color={isParentActive(isLeaveSubMenu, isLeaveExpanded) ? COLORS.primary : '#fff'}
+                                style={styles.chevronIcon}
+                            />
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[
-                                styles.subMenuItem,
-                                activeRoute === 'WFHHistory' && styles.activeSubMenuItem
-                            ]}
-                            onPress={() => navigateTo('WFHHistory')}
-                        >
-                            <Text
-                                style={[
-                                    styles.subMenuText,
-                                    activeRoute === 'WFHHistory' && styles.activeMenuText
-                                ]}
-                            >
-                                WFH History
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {/* LEAVE */}
-                <TouchableOpacity
-                    style={[
-                        styles.menuItem,
-                        isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
-                        styles.activeMenuItem
-                    ]}
-                    onPress={toggleLeaveMenu}
-                >
-                    <Icon
-                        name="umbrella-beach-outline"
-                        size={24}
-                        color={
-                            isParentActive(isLeaveSubMenu, isLeaveExpanded)
-                                ? COLORS.primary
-                                : '#fff'
-                        }
-                    />
-
-                    <Text
-                        style={[
-                            styles.menuText,
-                            isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
-                            styles.activeMenuText
-                        ]}
-                    >
-                        Leave
-                    </Text>
-
-                    <Icon
-                        name={isLeaveExpanded ? 'chevron-up' : 'chevron-down'}
-                        size={24}
-                        color={
-                            isParentActive(isLeaveSubMenu, isLeaveExpanded)
-                                ? COLORS.primary
-                                : '#fff'
-                        }
-                        style={styles.chevronIcon}
-                    />
-                </TouchableOpacity>
-
-                {
-                    isLeaveExpanded && (
-                        <View style={styles.subMenuContainer}>
-
-                            {[
-                                { name: 'Holidays', route: 'Holidays' },
-                                { name: 'Leave Request', route: 'LeaveRequest' },
-                                { name: 'Leave History', route: 'LeaveHistory' },
-                                { name: 'Comp-Off Grant Request', route: 'CompOffGrantRequest' },
-                                { name: 'Comp-Off History', route: 'CompOffHistory' },
-                            ].map(item => (
+                        {isLeaveExpanded && (
+                            <View style={styles.subMenuContainer}>
                                 <TouchableOpacity
-                                    key={item.route}
                                     style={[
                                         styles.subMenuItem,
-                                        activeRoute === item.route && styles.activeSubMenuItem
+                                        activeRoute === 'TeamLeaveRequests' && styles.activeSubMenuItem
                                     ]}
-                                    onPress={() => navigateTo(item.route)}
+                                    onPress={() => navigateTo('TeamLeaveRequests')}
                                 >
                                     <Text
                                         style={[
                                             styles.subMenuText,
-                                            activeRoute === item.route && styles.activeMenuText
+                                            activeRoute === 'TeamLeaveRequests' && styles.activeMenuText
                                         ]}
                                     >
-                                        {item.name}
+                                        Leave Request
                                     </Text>
                                 </TouchableOpacity>
-                            ))}
+                            </View>
+                        )}
+                        
+                        {/* Manager-specific actions can be added here later */}
+                    </>
+                )}
 
-                        </View>
-                    )
-                }
+                {activeTab === 'Self' && (
+                    <>
+                        {/* DASHBOARD */}
+                        <TouchableOpacity
+                            style={[
+                                styles.menuItem,
+                                activeRoute === 'Home' && styles.activeMenuItem
+                            ]}
+                            onPress={() => navigateTo('Home')}
+                        >
+                            <Icon
+                                name="view-dashboard-outline"
+                                size={24}
+                                color={activeRoute === 'Home' ? COLORS.primary : '#fff'}
+                            />
+                            <Text
+                                style={[
+                                    styles.menuText,
+                                    activeRoute === 'Home' && styles.activeMenuText
+                                ]}
+                            >
+                                Dashboard
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* ATTENDANCE */}
+                        <TouchableOpacity
+                            style={[
+                                styles.menuItem,
+                                isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
+                                styles.activeMenuItem
+                            ]}
+                            onPress={toggleAttendanceMenu}
+                        >
+                            <Icon
+                                name="calendar-month-outline"
+                                size={24}
+                                color={
+                                    isParentActive(isAttendanceSubMenu, isAttendanceExpanded)
+                                        ? COLORS.primary
+                                        : '#fff'
+                                }
+                            />
+
+                            <Text
+                                style={[
+                                    styles.menuText,
+                                    isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
+                                    styles.activeMenuText
+                                ]}
+                            >
+                                Attendance
+                            </Text>
+
+                            <Icon
+                                name={isAttendanceExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={24}
+                                color={
+                                    isParentActive(isAttendanceSubMenu, isAttendanceExpanded)
+                                        ? COLORS.primary
+                                        : '#fff'
+                                }
+                                style={styles.chevronIcon}
+                            />
+                        </TouchableOpacity>
+
+                        {isAttendanceExpanded && (
+                            <View style={styles.subMenuContainer}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'Attendance Grid' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('Attendance Grid')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'Attendance Grid' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        Attendance Grid
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'Regularization' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('Regularization')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'Regularization' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        Regularization
+                                    </Text>
+                                </TouchableOpacity> */}
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'Regularization' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('Regularization')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'Regularization' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        Regularization
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'WFHRequest' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('WFHRequest')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'WFHRequest' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        WFH Request
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'WFHHistory' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('WFHHistory')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'WFHHistory' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        WFH History
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* LEAVE */}
+                        <TouchableOpacity
+                            style={[
+                                styles.menuItem,
+                                isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
+                                styles.activeMenuItem
+                            ]}
+                            onPress={toggleLeaveMenu}
+                        >
+                            <Icon
+                                name="umbrella-beach-outline"
+                                size={24}
+                                color={
+                                    isParentActive(isLeaveSubMenu, isLeaveExpanded)
+                                        ? COLORS.primary
+                                        : '#fff'
+                                }
+                            />
+
+                            <Text
+                                style={[
+                                    styles.menuText,
+                                    isParentActive(isLeaveSubMenu, isLeaveExpanded) &&
+                                    styles.activeMenuText
+                                ]}
+                            >
+                                Leave
+                            </Text>
+
+                            <Icon
+                                name={isLeaveExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={24}
+                                color={
+                                    isParentActive(isLeaveSubMenu, isLeaveExpanded)
+                                        ? COLORS.primary
+                                        : '#fff'
+                                }
+                                style={styles.chevronIcon}
+                            />
+                        </TouchableOpacity>
+
+                        {
+                            isLeaveExpanded && (
+                                <View style={styles.subMenuContainer}>
+
+                                    {[
+                                        { name: 'Holidays', route: 'Holidays' },
+                                        { name: 'Leave Request', route: 'LeaveRequest' },
+                                        { name: 'Leave History', route: 'LeaveHistory' },
+                                        { name: 'Comp-Off Grant Request', route: 'CompOffGrantRequest' },
+                                        { name: 'Comp-Off History', route: 'CompOffHistory' },
+                                    ].map(item => (
+                                        <TouchableOpacity
+                                            key={item.route}
+                                            style={[
+                                                styles.subMenuItem,
+                                                activeRoute === item.route && styles.activeSubMenuItem
+                                            ]}
+                                            onPress={() => navigateTo(item.route)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.subMenuText,
+                                                    activeRoute === item.route && styles.activeMenuText
+                                                ]}
+                                            >
+                                                {item.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+
+                                </View>
+                            )
+                        }
+                    </>
+                )}
 
             </DrawerContentScrollView >
 

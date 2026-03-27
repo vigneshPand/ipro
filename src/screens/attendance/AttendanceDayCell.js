@@ -74,8 +74,9 @@ const getStatusLabel = (item) => {
 };
 
 const getBackgroundColor = (item) => {
-    const { status, leaveType, regularizationStatus } = item;
+    const { status, leaveType, regularizationStatus, permissionStatus } = item;
 
+    if (permissionStatus === 'Pending') return STATUS_COLORS['Pending Approval'];
     if (leaveType && !regularizationStatus) return STATUS_COLORS.Leave;
     if (status === 'Present') return STATUS_COLORS.Present;
     if (status === 'Absent') return STATUS_COLORS.Absent;
@@ -87,8 +88,9 @@ const getBackgroundColor = (item) => {
 };
 
 const getTextColor = (item) => {
-    const { status, leaveType, leaveStatus } = item;
+    const { status, leaveType, leaveStatus, permissionStatus } = item;
 
+    if (permissionStatus === 'Pending') return '#e65100';
     if (leaveType && leaveStatus === 'Pending') return '#e65100';
     if (leaveType) return STATUS_TEXT_COLORS.Leave;
 
@@ -126,18 +128,33 @@ const AttendanceDayCell = ({
         isEmpty,
         regularizationStatus,
         isTrailing,
-        isLeading
+        isLeading,
+        permissionStatus
     } = item || {};
 
     // Card click: allow Present, WFH Pending, Partial Leave, Permissions, and regularizationStatus === true
-    const canPress = !isFuture && !isLeading && !isTrailing && (
+    const isPermissionPending =
+        permissionStatus === 'Pending' ||
+        (permissionMinutes != null && permissionMinutes !== '');
+
+    const isValidStatus =
         status === 'Present' ||
         wfhStatus === 'Pending' ||
-        (permissionMinutes != null && permissionMinutes !== '') ||
-        (leaveType && (leaveType.toLowerCase() === 'firsthalf' || leaveType.toLowerCase() === 'secondhalf')) ||
-        regularizationStatus
-    );
+        isPermissionPending ||
+        (leaveType &&
+            leaveType.toLowerCase() === 'leave' &&
+            status === 'Pending Approval') ||
+        (leaveType &&
+            (leaveType.toLowerCase() === 'firsthalf' ||
+                leaveType.toLowerCase() === 'secondhalf')) ||
+        regularizationStatus;
 
+    const canPress =
+        !isTrailing &&
+        (
+            (!isFuture) || isPermissionPending
+        ) &&
+        isValidStatus;
     // Edit icon: show ONLY if regularizationStatus is falsy AND date is within last 7 days from today
     let showEditIcon = false;
     if (!isEmpty) {
@@ -195,7 +212,7 @@ const AttendanceDayCell = ({
     return (
         <View style={styles.cellWrapper}>
             <TouchableWithoutFeedback
-                onPress={canPress ? onPress : undefined}
+                onPress={canPress ? onPress : null}
                 disabled={!canPress}
             >
                 <Animated.View style={[styles.cell, { backgroundColor: bgColor }, animatedStyle]}>

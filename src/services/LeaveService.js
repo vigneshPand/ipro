@@ -102,6 +102,28 @@ class LeaveService {
             };
         }
     }
+
+    // --- Manager / Admin Flow ---
+
+    async getManagerPendingLeaves(params) {
+        try {
+            const response = await apiClient.get('/leave/managerOrAdminPendingTable', { params });
+            return response.data;
+        } catch (error) {
+            console.error('getManagerPendingLeaves Error:', error);
+            throw error;
+        }
+    }
+
+    async getManagerHistoryLeaves(params) {
+        try {
+            const response = await apiClient.get('/leave/managerOrAdminHistoryTable', { params });
+            return response.data;
+        } catch (error) {
+            console.error('getManagerHistoryLeaves Error:', error);
+            throw error;
+        }
+    }
 }
 
 export default new LeaveService();
