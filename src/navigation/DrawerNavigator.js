@@ -12,6 +12,8 @@ import WFHHistoryScreen from '../screens/wfh/WFHHistory';
 import AttendanceGridScreen from '../screens/attendance/AttendanceGrid';
 import RegularizationHistoryScreen from '../screens/regularization/RegularizationHistoryScreen';
 import TeamLeaveRequestsScreen from '../screens/leave/TeamLeaveRequestsScreen';
+import TeamRegularizationScreen from '../screens/regularization/TeamRegularizationScreen';
+import TeamWFHScreen from '../screens/wfh/TeamWFHScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -47,6 +49,8 @@ const DrawerNavigator = ({ route }) => {
             <Drawer.Screen name="CompOffHistory" component={CompOffHistoryScreen} />
             <Drawer.Screen name="Regularization" component={RegularizationHistoryScreen} />
             <Drawer.Screen name="TeamLeaveRequests" component={TeamLeaveRequestsScreen} />
+            <Drawer.Screen name="TeamRegularization" component={TeamRegularizationScreen} />
+            <Drawer.Screen name="TeamWFH" component={TeamWFHScreen} />
         </Drawer.Navigator>
     );
 };

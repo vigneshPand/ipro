@@ -1,89 +1,95 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { debounce } from '../../utils/Debounce';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    FlatList,
+    TextInput,
+    ActivityIndicator,
+    RefreshControl,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Icons from 'react-native-vector-icons/Feather';
+
 import { COLORS } from '../../utils/theme';
+import AuthService from '../../services/AuthService';
 import useHistoryFilters from '../../hooks/useHistoryFilters';
 import HistoryFilters from '../../components/historyFilters/HistoryFilters';
-import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
-import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
-import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
-import AuthService from '../../services/AuthService';
 import LoadingOverlay from '../../components/LoadingOverlay';
-import useTeamLeaveStore from '../../store/useTeamLeaveStore';
-import { debounce } from '../../utils/Debounce';
+import TeamRequestCard from '../../components/teamRequest/TeamRequestCard';
+import TeamWFHModal from '../../components/teamRequest/TeamWFHModal';
+import useTeamWFHStore from '../../store/useTeamWFHStore';
+import { getMonthRange } from '../../utils/dateUtils';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEBOUNCE_MS = 400;
 
-import { getMonthRange } from '../../utils/dateUtils';
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-const TeamLeaveRequestsScreen = ({ navigation }) => {
+const TeamWFHScreen = ({ navigation }) => {
+
     const [activeTab, setActiveTab] = useState('Pending');
     const [searchQuery, setSearchQuery] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
-
-    const userMailRef = useRef(null);
+    const [userEmail, setUserEmail] = useState(null);
+    const [managerUserId, setManagerUserId] = useState(null);
     const isInitialMount = useRef(true);
 
+    // ── Store ──
     const {
-        pendingList, loadingPending, fetchPendingLeaves, fetchNextPendingPage, resetPending,
-        historyList, loadingHistory, fetchHistoryLeaves, fetchNextHistoryPage, resetHistory,
-        fetchLeaveDetails, selectedLeaveDetails, loadingLeaveDetails,
-    } = useTeamLeaveStore();
+        pendingList, loadingPending, fetchPendingList, fetchNextPendingPage, resetPending,
+        historyList, loadingHistory, fetchHistoryList, fetchNextHistoryPage, resetHistory,
+        fetchDetails, setSelectedItem, resetForTabSwitch,
+    } = useTeamWFHStore();
 
-    const {
-        filters,
-        updateFilters,
-        buildQueryParams,
-    } = useHistoryFilters();
+    const { filters, updateFilters, buildQueryParams } = useHistoryFilters();
 
-    // ─── Get user email once ───
-    const getUserMail = useCallback(async () => {
-        if (userMailRef.current) return userMailRef.current;
+    // ── Resolve user info ──
+    const resolveUserInfo = useCallback(async () => {
+        if (userEmail && managerUserId) return { email: userEmail, id: managerUserId };
         const user = await AuthService.getUserInfo();
-        userMailRef.current = user?.mail || user?.email || null;
-        return userMailRef.current;
-    }, []);
+        const email = user?.email || user?.mail || null;
+        const id = user?.userId || null;
+        setUserEmail(email);
+        setManagerUserId(id);
+        return { email, id };
+    }, [userEmail, managerUserId]);
 
-    // ─── Core fetch for a specific tab ───
-    const fetchDataForTab = useCallback(async (tab, keyword = '') => {
+    // ── Unified Fetching logic ──
+    const performFetch = useCallback(async (tab, keyword, currentFilters) => {
         try {
-            const mail = await getUserMail();
-            if (!mail) return;
+            const info = await resolveUserInfo();
+            if (!info.email) return;
 
             const year = new Date().getFullYear();
             const raw = buildQueryParams(null, year, keyword);
-            // Remove userId – manager API uses mail instead
-            const { userId, pageNo, sortBy, direction, keyword: _kw, ...extraParams } = raw;
-            extraParams.keyword = keyword;
+            // buildQueryParams might use common status filter names, let's extract them
+            const { userId, pageNo, sortBy, direction, keyword: _kw, ...extra } = raw;
+            extra.keyword = keyword;
 
             if (tab === 'Pending') {
-                await fetchPendingLeaves(mail, year, 0, extraParams);
+                await fetchPendingList(info.email, year, 0, extra);
             } else {
-                const defaultRange = getMonthRange();
-                const fDate = extraParams.fromDate || defaultRange.fromDate;
-                const tDate = extraParams.toDate || defaultRange.toDate;
-                const { fromDate, toDate, ...historyExtra } = extraParams;
-                await fetchHistoryLeaves(mail, year, fDate, tDate, 0, historyExtra);
+                const def = getMonthRange();
+                const fDate = extra.fromDate || def.fromDate;
+                const tDate = extra.toDate || def.toDate;
+                const { fromDate, toDate, ...histExtra } = extra;
+                await fetchHistoryList(info.email, year, fDate, tDate, 0, histExtra);
             }
         } catch (err) {
-            console.error('TeamLeaveRequests fetchData error:', err);
+            console.error('TeamWFH performFetch error:', err);
         }
-    }, [buildQueryParams, fetchPendingLeaves, fetchHistoryLeaves, getUserMail]);
-
-    // Wrapper that uses current active tab (for search / refresh / focus)
-    const fetchData = useCallback(
-        (keyword = '') => fetchDataForTab(activeTab, keyword),
-        [activeTab, fetchDataForTab]
-    );
+    }, [buildQueryParams, fetchPendingList, fetchHistoryList, resolveUserInfo]);
 
     // ─── Search with debounce ───
     const debouncedSearch = useRef(
         debounce((text) => {
-            fetchData(text);
+            performFetch(activeTab, text, filters);
         }, DEBOUNCE_MS)
     ).current;
 
@@ -92,93 +98,100 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
         debouncedSearch(text);
     }, [debouncedSearch]);
 
-    // ─── On screen focus → fetch only if not triggered by search ───
-    useFocusEffect(
-        useCallback(() => {
-            if (!searchQuery) {
-                fetchData('');
-            }
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [fetchData, filters])
-    );
-
-    // ─── Reset list when filters change (not on mount) ───
+    // ── Trigger fetch on mount and tab change ──
     useEffect(() => {
-        if (isInitialMount.current) {
+        // Initial load: When user info is set, fetch initial 'Pending' tab
+        if (isInitialMount.current && userEmail) {
             isInitialMount.current = false;
+            performFetch(activeTab, searchQuery, filters);
             return;
         }
-        if (activeTab === 'Pending') {
-            resetPending();
-        } else {
-            resetHistory();
+        // Tab change/Filter change: Trigger fetch
+        if (!isInitialMount.current) {
+            performFetch(activeTab, searchQuery, filters);
         }
-    }, [filters, activeTab, resetPending, resetHistory]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, userEmail, filters]);
 
-    // ─── Tab switch ───
+    useEffect(() => () => {
+        // Cleanup if needed
+    }, []);
+
+    // ── Pre-fetch switch cleanup (Optional, but kept for safety) ──
+    useEffect(() => {
+        if (isInitialMount.current) return;
+        // This is usually handled in handleTabChange, but ensures lists are cleared when filters change if needed
+    }, [filters]);
+
+    // ── Tab switch ──
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
-
         setActiveTab(tab);
         setSearchQuery('');
+        resetForTabSwitch();
+
+        // Immediate reset for better navigation feel
+        resetPending();
+        resetHistory();
 
         if (tab === 'Pending') {
-            resetPending();
             updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
         } else {
-            resetHistory();
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, leaveTypes: [], status: [], pageNo: 0 });
         }
-        // Do NOT call fetch here; useFocusEffect + filters change
-        // will trigger a single fetch for the current active tab.
     };
 
-    // ─── Pagination (infinite scroll) ───
+    // ── Pagination ──
     const handleEndReached = useCallback(async () => {
         try {
-            const mail = await getUserMail();
-            if (!mail) return;
-
+            const info = await resolveUserInfo();
+            if (!info.email) return;
             const year = new Date().getFullYear();
             const raw = buildQueryParams(null, year, searchQuery);
-            const { userId, pageNo, sortBy, direction, keyword: _kw, ...extraParams } = raw;
-            extraParams.keyword = searchQuery;
+            const { userId, pageNo, sortBy, direction, keyword: _kw, ...extra } = raw;
+            extra.keyword = searchQuery;
 
             if (activeTab === 'Pending') {
-                await fetchNextPendingPage(mail, year, extraParams);
+                await fetchNextPendingPage(info.email, year, extra);
             } else {
-                const defaultRange = getMonthRange();
-                const fDate = extraParams.fromDate || defaultRange.fromDate;
-                const tDate = extraParams.toDate || defaultRange.toDate;
-                const { fromDate, toDate, ...historyExtra } = extraParams;
-                await fetchNextHistoryPage(mail, year, fDate, tDate, historyExtra);
+                const def = getMonthRange();
+                const fDate = extra.fromDate || def.fromDate;
+                const tDate = extra.toDate || def.toDate;
+                const { fromDate, toDate, ...histExtra } = extra;
+                await fetchNextHistoryPage(info.email, year, fDate, tDate, histExtra);
             }
         } catch (err) {
-            console.error('TeamLeaveRequests handleEndReached error:', err);
+            console.error('TeamWFH handleEndReached error:', err);
         }
-    }, [activeTab, searchQuery, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage, getUserMail]);
+    }, [activeTab, searchQuery, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage, resolveUserInfo]);
 
-    // ─── Pull-to-refresh ───
+    // ── Pull-to-refresh ──
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
-        await fetchData(searchQuery);
+        await performFetch(activeTab, searchQuery, filters);
         setRefreshing(false);
-    }, [fetchData, searchQuery]);
+    }, [activeTab, performFetch, searchQuery, filters]);
 
-    // ─── Card press → Detail Modal ───
-    const handleCardPress = (item) => {
+    // ── Card press → open detail modal ──
+    const handleCardPress = useCallback((item) => {
+        setSelectedItem(item);
+        fetchDetails(item.requestId);
         setModalVisible(true);
-        fetchLeaveDetails(item.id, item.startDate, item.endDate, item.multiApprovalNumber);
-    };
+    }, [setSelectedItem, fetchDetails]);
 
-    // ─── Empty state ───
+    // ── Action success → refresh list ──
+    const handleActionSuccess = useCallback(() => {
+        performFetch(activeTab, searchQuery, filters);
+    }, [activeTab, performFetch, searchQuery, filters]);
+
+    // ── Empty state ──
     const renderEmpty = () => (
         <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
+            <View style={styles.emptyIconWrap}>
                 <Icons name="inbox" size={48} color="#d1d5db" />
             </View>
-            <Text style={styles.emptyText}>No data is available</Text>
+            <Text style={styles.emptyText}>No records found</Text>
         </View>
     );
 
@@ -187,33 +200,32 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
+
+            {/* ── Header ── */}
             <View style={styles.headerRow}>
                 <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.backBtn}>
                     <Icon name="menu" size={24} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerText}>Leave Requests</Text>
+                <Text style={styles.headerText}>Work From Home</Text>
                 <View style={styles.headerSpacer} />
             </View>
 
-            {/* Tabs */}
+            {/* ── Tabs ── */}
             <View style={styles.tabContainer}>
-                <TouchableOpacity
-                    style={[styles.tabButton, activeTab === 'Pending' && styles.activeTab]}
-                    onPress={() => handleTabChange('Pending')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'Pending' && styles.activeTabText]}>Pending</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.tabButton, activeTab === 'History' && styles.activeTab]}
-                    onPress={() => handleTabChange('History')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>History</Text>
-                </TouchableOpacity>
+                {['Pending', 'History'].map(tab => (
+                    <TouchableOpacity
+                        key={tab}
+                        style={[styles.tabButton, activeTab === tab && styles.activeTab]}
+                        onPress={() => handleTabChange(tab)}
+                    >
+                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                            {tab}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
 
-            {/* Search Input */}
+            {/* ── Search ── */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchInputWrapper}>
                     <TextInput
@@ -228,12 +240,12 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                             <Icon name="close-circle" size={20} color="#9ca3af" />
                         </TouchableOpacity>
                     ) : (
-                        <Icons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
+                        <Icons name="search" size={20} color="#9ca3af" />
                     )}
                 </View>
             </View>
 
-            {/* Filter Bar */}
+            {/* ── Filters (date range only) ── */}
             <HistoryFilters
                 filters={filters}
                 onFilterChange={updateFilters}
@@ -248,39 +260,29 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                 defaultFromDate={activeTab === 'History' ? getMonthRange().fromDate : null}
                 defaultToDate={activeTab === 'History' ? getMonthRange().toDate : null}
                 showDateFilter={true}
-                showLeaveTypeFilter={true}
+                showLeaveTypeFilter={false}
                 showStatusFilter={activeTab === 'History'}
             />
 
-            {/* Content searching loader overlay */}
+            {/* ── First-load overlay ── */}
             <LoadingOverlay
                 visible={isLoading && listData.length === 0 && !refreshing}
                 message="Fetching requests..."
                 type="loading"
             />
 
+            {/* ── List ── */}
             <FlatList
                 data={listData}
-                keyExtractor={(item, index) => `${item.id}-${index}`}
-                renderItem={({ item }) =>
-                    activeTab === 'Pending' ? (
-                        <PendingLeaveCard
-                            userName={item?.userName || item?.name || ''}
-                            type={item?.type || ''}
-                            days={item?.noOfDays || 0}
-                            status={item?.status || 'PENDING'}
-                            pendingWith={item?.pendingWith || item?.assignToName || ''}
-                            startDate={item?.startDate}
-                            endDate={item?.endDate}
-                            onPress={() => handleCardPress(item)}
-                        />
-                    ) : (
-                        <HistoryLeaveCard
-                            item={item}
-                            onPress={handleCardPress}
-                        />
-                    )
-                }
+                keyExtractor={(item, idx) => `${item.requestId}-${idx}`}
+                renderItem={({ item }) => (
+                    <TeamRequestCard
+                        item={item}
+                        onPress={handleCardPress}
+                        type="wfh"
+                        isHistory={activeTab === 'History'}
+                    />
+                )}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={isLoading ? null : renderEmpty}
                 showsVerticalScrollIndicator={false}
@@ -291,7 +293,12 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                 windowSize={5}
                 removeClippedSubviews={true}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[COLORS.primary]}
+                        tintColor={COLORS.primary}
+                    />
                 }
                 ListFooterComponent={
                     isLoading && listData.length > 0 ? (
@@ -302,19 +309,21 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
                 }
             />
 
-            {/* Details Modal (shared) */}
-            <LeaveHistoryDetailsModal
+            {/* ── Detail Modal ── */}
+            <TeamWFHModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
-                showWithdraw={false}
-                externalLeaveDetails={selectedLeaveDetails}
-                externalLoadingDetails={loadingLeaveDetails}
-                onTransferSuccess={() => fetchData(searchQuery)}
+                store={useTeamWFHStore}
+                managerUserId={managerUserId}
+                isPending={activeTab === 'Pending'}
+                onActionSuccess={handleActionSuccess}
             />
 
         </SafeAreaView>
     );
 };
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     container: {
@@ -327,17 +336,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 16,
     },
-    backBtn: {
-        marginRight: 16,
-    },
-    headerSpacer: {
-        width: 24,
-    },
+    backBtn: { marginRight: 16 },
+    headerSpacer: { width: 24 },
     headerText: {
         color: '#fff',
         fontSize: 18,
         fontWeight: 'bold',
         letterSpacing: 0.5,
+        flex: 1,
     },
     tabContainer: {
         flexDirection: 'row',
@@ -357,17 +363,9 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: 'transparent',
     },
-    activeTab: {
-        borderBottomColor: COLORS.primary,
-    },
-    tabText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: COLORS.inactiveTab,
-    },
-    activeTabText: {
-        color: COLORS.primary,
-    },
+    activeTab: { borderBottomColor: COLORS.primary },
+    tabText: { fontSize: 15, fontWeight: '600', color: COLORS.inactiveTab },
+    activeTabText: { color: COLORS.primary },
     searchContainer: {
         backgroundColor: '#fff',
         paddingHorizontal: 16,
@@ -390,9 +388,6 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#374151',
     },
-    searchIcon: {
-        marginLeft: 8,
-    },
     listContent: {
         padding: 16,
         paddingBottom: 40,
@@ -404,7 +399,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 60,
     },
-    emptyIconContainer: {
+    emptyIconWrap: {
         backgroundColor: '#f3f4f6',
         padding: 24,
         borderRadius: 50,
@@ -415,15 +410,10 @@ const styles = StyleSheet.create({
         color: COLORS.grayText,
         fontWeight: '500',
     },
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     footerLoader: {
         paddingVertical: 10,
         alignItems: 'center',
     },
 });
 
-export default TeamLeaveRequestsScreen;
+export default TeamWFHScreen;

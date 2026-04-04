@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { COLORS } from '../../utils/theme';
+import { getMonthRange } from '../../utils/dateUtils';
 import AuthService from '../../services/AuthService';
 import useHistoryFilters from '../../hooks/useHistoryFilters';
 import HistoryFilters from '../../components/historyFilters/HistoryFilters';
@@ -21,18 +22,6 @@ import RegularizationListCard, {
     RegularizationHistoryCard,
 } from '../../components/regularization/RegularizationListCard';
 import RegularizationDetailsModal from '../../components/regularization/RegularizationDetailsModal';
-
-// ─── Helper ────────────────────────────────────────────────────────────────────
-
-const getMonthRange = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDate = new Date(year, month + 1, 0).getDate();
-    const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
-    return { fromDate: firstDay, toDate: lastDay };
-};
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
@@ -95,7 +84,7 @@ const RegularizationHistoryScreen = ({ navigation }) => {
                 );
             }
         } catch (err) {
-            console.error('RegularizationHistory fetchData error:', err);
+            // Silent catch
         }
     }, [activeTab, buildQueryParams, fetchPendingList, fetchHistoryList]);
 
@@ -105,6 +94,13 @@ const RegularizationHistoryScreen = ({ navigation }) => {
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [fetchData, filters])
     );
+
+    // ── Pull-to-refresh ───────────────────────────────────────────────────────
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchData();
+        setRefreshing(false);
+    }, [fetchData]);
 
     // ── Tab switch ────────────────────────────────────────────────────────────
     const handleTabChange = (tab) => {
@@ -119,12 +115,6 @@ const RegularizationHistoryScreen = ({ navigation }) => {
         }
     };
 
-    // ── Pull-to-refresh ───────────────────────────────────────────────────────
-    const onRefresh = useCallback(async () => {
-        setRefreshing(true);
-        await fetchData();
-        setRefreshing(false);
-    }, [fetchData]);
 
     // ── Card press → fetch details ────────────────────────────────────────────
     const handleCardPress = useCallback((item) => {
@@ -162,7 +152,7 @@ const RegularizationHistoryScreen = ({ navigation }) => {
                 );
             }
         } catch (err) {
-            console.error('RegularizationHistory endReached error:', err);
+            // Silent catch
         }
     }, [activeTab, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage]);
 
@@ -175,7 +165,7 @@ const RegularizationHistoryScreen = ({ navigation }) => {
                 await fetchPendingList(user.userId, new Date().getFullYear(), 0);
             }
         } catch (err) {
-            console.error('RegularizationHistory withdraw refresh error:', err);
+            // Silent catch
         }
     }, [fetchPendingList, resetForTabSwitch]);
 

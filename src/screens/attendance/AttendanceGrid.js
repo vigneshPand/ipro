@@ -82,7 +82,7 @@ const AttendanceGridScreen = ({ navigation }) => {
                 await fetchCalendarStatus(user.userId);
             }
         } catch (err) {
-            console.error('AttendanceGrid loadData error:', err);
+            // Silent catch
         }
     }, [fetchCalendarStatus]);
 
@@ -106,7 +106,7 @@ const AttendanceGridScreen = ({ navigation }) => {
         // Build a lookup map: date string → data object
         const dataMap = {};
         (attendanceData || []).forEach((item) => {
-            const d = item.date || item.day;
+            const d = item?.date || item?.day;
             if (d) {
                 const dayNum = typeof d === 'string'
                     ? parseInt(d.split('-').pop(), 10)

@@ -1,12 +1,6 @@
 import React from 'react';
 import CommonHistoryCard from '../common/HistoryCard';
-import { formatMinutesToTime } from '../../utils/dateUtils';
-
-const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
-};
+import { formatMinutesToTime, formatDate } from '../../utils/dateUtils';
 
 const PendingLeaveCard = ({ userName, type, days, status, pendingWith, startDate, endDate, onPress }) => {
     const isPermission = type === 'Permission';

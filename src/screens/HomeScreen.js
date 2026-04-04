@@ -12,7 +12,7 @@ import {
     RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, DrawerActions } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/SimpleLineIcons';
 import Icons from 'react-native-vector-icons/MaterialCommunityIcons';
 import moment from 'moment';
@@ -87,6 +87,11 @@ const HomeScreen = ({ route, navigation }) => {
         return () => clearInterval(timer);
     }, []);
 
+    // ─── Close drawer on role switch ───
+    useEffect(() => {
+        navigation.dispatch(DrawerActions.closeDrawer());
+    }, [activeTab, navigation]);
+
     useFocusEffect(
         useCallback(() => {
             fetchInitialData();
@@ -123,9 +128,7 @@ const HomeScreen = ({ route, navigation }) => {
                     setActiveWorkMode(null);
                 }
             } catch (err) {
-                if (err.response?.status !== 404) {
-                    console.error('Fetch Activity Error:', err);
-                }
+                // Silent catch for 404
             }
 
             // 2. Fetch Employee Last Status (Handles 404 gracefully)

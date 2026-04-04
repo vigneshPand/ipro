@@ -7,21 +7,11 @@ import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
+import { getMonthRange } from '../../utils/dateUtils';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
 import useHistoryFilters from '../../hooks/useHistoryFilters';
 import HistoryFilters from '../../components/historyFilters/HistoryFilters';
-
-// Helper: get current month date range (YYYY-MM-DD)
-const getMonthRange = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDate = new Date(year, month + 1, 0).getDate();
-    const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
-    return { fromDate: firstDay, toDate: lastDay };
-};
 
 const LeaveHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
@@ -62,7 +52,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 await fetchHistoryLeaves(user.userId, new Date().getFullYear(), fDate, tDate, 0, historyExtraParams);
             }
         } catch (err) {
-            console.error(err);
+            // Silent catch
         }
     }, [activeTab, buildQueryParams, fetchPendingLeaves, fetchHistoryLeaves]);
 
@@ -102,6 +92,9 @@ const LeaveHistoryScreen = ({ navigation }) => {
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
+        const { resetPending, resetHistory } = useLeaveStore.getState();
+        resetPending();
+        resetHistory();
         if (tab === 'History') {
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, leaveTypes: [], status: [], pageNo: 0 });
@@ -187,12 +180,12 @@ const LeaveHistoryScreen = ({ navigation }) => {
                         keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
                         renderItem={({ item }) => (
                             <PendingLeaveCard
-                                type={item.type}
-                                days={item.noOfDays}
-                                status={item.status}
-                                pendingWith={item.pendingWith || item.assignToName}
-                                startDate={item.startDate}
-                                endDate={item.endDate}
+                                type={item?.type || ''}
+                                days={item?.noOfDays || 0}
+                                status={item?.status || 'PENDING'}
+                                pendingWith={item?.pendingWith || item?.assignToName || ''}
+                                startDate={item?.startDate}
+                                endDate={item?.endDate}
                                 onPress={() => handleCardPress(item)}
                             />
                         )}

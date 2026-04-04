@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../../utils/theme';
+import { getMonthRange } from '../../../utils/dateUtils';
 import useCompOffStore from '../../../store/useCompOffStore';
 import AuthService from '../../../services/AuthService';
 import HistoryTabs from '../../../components/leave/HistoryTabs';
@@ -12,16 +13,6 @@ import HistoryCompOffCard from './HistoryCompOffCard';
 import CompOffDetailsModal from './CompOffDetailsModal';
 import useHistoryFilters from '../../../hooks/useHistoryFilters';
 import HistoryFilters from '../../../components/historyFilters/HistoryFilters';
-
-const getMonthRange = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDate = new Date(year, month + 1, 0).getDate();
-    const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
-    return { fromDate: firstDay, toDate: lastDay };
-};
 
 const CompOffHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');

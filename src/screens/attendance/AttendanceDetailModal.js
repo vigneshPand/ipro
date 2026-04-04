@@ -24,6 +24,7 @@ import AttendanceService from '../../services/AttendanceService';
 import WithdrawConfirmationModal from '../../components/leave/WithdrawConfirmationModal';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import useLeaveStore from '../../store/useLeaveStore';
+import { formatTime } from '../../utils/dateUtils';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -31,24 +32,6 @@ const MONTH_NAMES_SHORT = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
-
-/**
- * Format a time string (e.g., "13:49:47") to 12-hour format.
- */
-const formatTime = (timeStr) => {
-    if (!timeStr || timeStr === '-' || timeStr === '') return '-';
-    try {
-        const parts = timeStr.split(':');
-        if (parts.length < 2) return timeStr;
-        let hours = parseInt(parts[0], 10);
-        const minutes = parts[1];
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12 || 12;
-        return `${hours}:${minutes} ${ampm}`;
-    } catch {
-        return timeStr;
-    }
-};
 
 const formatPermission = (minutes) => {
     if (minutes === null || minutes === undefined || minutes === '') return '00:00 hrs';
@@ -202,10 +185,8 @@ const AttendanceDetailModal = ({
 
     // Show withdraw icon if it's a leave case (has leaveType or Leave status)
     const isLeaveCase = !!(raw.leaveType || raw.status === 'Leave' || raw.leaveStatus || raw.permissionStatus === 'Pending' || raw.permissionMinutes != null && raw.permissionMinutes !== '');
-    const isAlreadyWithdrawn = raw.leaveStatus === 'Withdraw';
+    const isAlreadyWithdrawn = raw?.leaveStatus === 'Withdraw';
     const showWithdrawAction = isLeaveCase && !isAlreadyWithdrawn;
-
-    console.log('showWithdrawAction', showWithdrawAction);
 
     const handleWithdrawClick = (type = 'leave') => {
         if (isWithin3Days) {

@@ -6,22 +6,14 @@ import { COLORS } from '../../utils/theme';
 import PieChart from '../../components/common/PieChart';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
-import { formatMinutesToTime } from '../../utils/dateUtils';
-
-const parseNumber = (val) => {
-    if (typeof val === 'string' && val.includes('hrs')) {
-        const [hours, mins] = val.replace('hrs', '').split(':');
-        return parseInt(hours, 10) + parseInt(mins, 10) / 60;
-    }
-    return parseFloat(val) || 0;
-};
+import { formatMinutesToTime, parseNumber } from '../../utils/dateUtils';
 
 // Extracted SimplePie logic to components/common/PieChart
 
 const LeaveCard = ({ item, navigation }) => {
-    const requestedVal = parseNumber(item.requested || '0');
-    const usedVal = parseNumber(item.used || '0') + parseNumber(item.approved || '0');
-    const itemBalance = item.balance !== undefined ? item.balance : item.remaining;
+    const requestedVal = parseNumber(item?.requested || '0');
+    const usedVal = parseNumber(item?.used || '0') + parseNumber(item?.approved || '0');
+    const itemBalance = item?.balance !== undefined ? item?.balance : item?.remaining;
     const balanceVal = parseNumber(itemBalance || '0');
     const totalVal = requestedVal + usedVal + balanceVal;
 
@@ -140,7 +132,7 @@ const LeaveRequestScreen = ({ navigation }) => {
                 await fetchLeaveBalances(userId, currentYear);
             }
         } catch (err) {
-            console.error('LeaveRequest loadData error:', err);
+            // Silent catch
         }
     }, [fetchLeaveBalances]);
 

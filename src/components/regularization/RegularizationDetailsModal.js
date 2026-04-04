@@ -13,52 +13,9 @@ import useRegularizationHistoryStore from '../../store/useRegularizationHistoryS
 import WithdrawConfirmationModal from '../leave/WithdrawConfirmationModal';
 import LoadingOverlay from '../LoadingOverlay';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const formatDisplayDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return `${String(date.getDate()).padStart(2, '0')}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
-};
-
-const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'approved': return '#10b981'; // green
-        case 'rejected': return '#ef4444'; // red
-        case 'pending': return '#f59e0b'; // orange
-        case 'withdraw': return '#e4b5edff'; // purple
-        default: return '#6b7280'; // gray
-    }
-};
-
-/**
- * Converts the flat regularizationRecords array into display pairs.
- * currStatus: true = IN, false = OUT
- * Groups them in order: collects consecutive IN/OUT pairs.
- */
-const buildEntryRows = (records = []) => {
-    if (!records || records.length === 0) return [];
-    const rows = [];
-    let i = 0;
-    while (i < records.length) {
-        const curr = records[i];
-        const isIn = curr.currStatus === true;
-        if (isIn) {
-            const next = records[i + 1];
-            const isNextOut = next && next.currStatus === false;
-            rows.push({
-                inEntry: curr,
-                outEntry: isNextOut ? next : null,
-            });
-            i += isNextOut ? 2 : 1;
-        } else {
-            // orphan OUT
-            rows.push({ inEntry: null, outEntry: curr });
-            i++;
-        }
-    }
-    return rows;
-};
+import { formatDate } from '../../utils/dateUtils';
+import { getStatusColor } from '../../utils/statusUtils';
+import { buildEntryRows } from '../../utils/regularizationUtils';
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -177,12 +134,12 @@ const RegularizationDetailsModal = ({ visible, onClose, showWithdraw = false, on
 
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Applied On</Text>
-                                <Text style={styles.detailValue}>{formatDisplayDate(detailsData.appliedOn)}</Text>
+                                <Text style={styles.detailValue}>{formatDate(detailsData.appliedOn)}</Text>
                             </View>
 
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Regularization Date</Text>
-                                <Text style={styles.detailValue}>{formatDisplayDate(detailsData.regularizedDate)}</Text>
+                                <Text style={styles.detailValue}>{formatDate(detailsData.regularizedDate)}</Text>
                             </View>
 
                             <View style={styles.detailRow}>

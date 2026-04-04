@@ -13,9 +13,15 @@ export const parseAPIDate = (dateStr) => {
     return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
 };
 
-// Helper: format Date for display (e.g. "5-Mar-2026")
-export const formatDate = (date) => {
-    return `${date.getDate()}-${date.toLocaleString('default', { month: 'short' })}-${date.getFullYear()}`;
+// Helper: format Date for display (e.g. "05-Mar-2026")
+export const formatDate = (dateInput) => {
+    if (!dateInput) return '-';
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '-';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleString('default', { month: 'short' });
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
 };
 
 // Helper: auto-format permission HH:MM layout
@@ -43,4 +49,44 @@ export const formatMinutesToTime = (totalMinutes) => {
     const hours = Math.floor(num / 60);
     const mins = Math.round(num % 60);
     return `${hours}:${mins.toString().padStart(2, '0')}hrs`;
+};
+
+// Helper: get current month date range (YYYY-MM-DD)
+export const getMonthRange = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDate = new Date(year, month + 1, 0).getDate();
+    const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
+    return { fromDate: firstDay, toDate: lastDay };
+};
+
+/**
+ * Format a time string (e.g., "13:49:47") to 12-hour format.
+ */
+export const formatTime = (timeStr) => {
+    if (!timeStr || timeStr === '-' || timeStr === '') return '-';
+    try {
+        const parts = timeStr.split(':');
+        if (parts.length < 2) return timeStr;
+        let hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return `${hours}:${minutes} ${ampm}`;
+    } catch {
+        return timeStr;
+    }
+};
+
+/**
+ * Robust number parsing for leave balances and hours.
+ */
+export const parseNumber = (val) => {
+    if (typeof val === 'string' && val.includes('hrs')) {
+        const [hours, mins] = val.replace('hrs', '').split(':');
+        return parseInt(hours, 10) + parseInt(mins, 10) / 60;
+    }
+    return parseFloat(val) || 0;
 };

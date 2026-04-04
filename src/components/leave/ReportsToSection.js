@@ -8,7 +8,7 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
     const [showCCDropdown, setShowCCDropdown] = useState(false);
 
     const filteredCC = ccList.filter(user =>
-        user.name.toLowerCase().includes(ccSearch.toLowerCase())
+        user?.name?.toLowerCase().includes(ccSearch.toLowerCase())
     );
 
     const handleSelectCC = (user) => {

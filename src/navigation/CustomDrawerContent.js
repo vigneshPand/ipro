@@ -39,7 +39,7 @@ const CustomDrawerContent = (props) => {
 
     const isAttendanceSubMenu = [
         'Attendance Grid',
-        // 'Regularization',
+        'Regularization',
         'WFHRequest',
         'WFHHistory',
         'RegularizationHistory',
@@ -136,7 +136,76 @@ const CustomDrawerContent = (props) => {
                                 Team Dashboard
                             </Text>
                         </TouchableOpacity>
-                        
+
+                        {/* Attendance (Manager Mode) */}
+                        <TouchableOpacity
+                            style={[
+                                styles.menuItem,
+                                isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
+                                styles.activeMenuItem
+                            ]}
+                            onPress={toggleAttendanceMenu}
+                        >
+                            <Icon
+                                name="calendar-clock-outline"
+                                size={24}
+                                color={isParentActive(isAttendanceSubMenu, isAttendanceExpanded) ? COLORS.primary : '#fff'}
+                            />
+                            <Text
+                                style={[
+                                    styles.menuText,
+                                    isParentActive(isAttendanceSubMenu, isAttendanceExpanded) &&
+                                    styles.activeMenuText
+                                ]}
+                            >
+                                Attendance
+                            </Text>
+                            <Icon
+                                name={isAttendanceExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={24}
+                                color={isParentActive(isAttendanceSubMenu, isAttendanceExpanded) ? COLORS.primary : '#fff'}
+                                style={styles.chevronIcon}
+                            />
+                        </TouchableOpacity>
+                        {isAttendanceExpanded && (
+                            <View style={styles.subMenuContainer}>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'TeamRegularization' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('TeamRegularization')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'TeamRegularization' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        Regularization
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.subMenuItem,
+                                        activeRoute === 'TeamWFH' && styles.activeSubMenuItem
+                                    ]}
+                                    onPress={() => navigateTo('TeamWFH')}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.subMenuText,
+                                            activeRoute === 'TeamWFH' && styles.activeMenuText
+                                        ]}
+                                    >
+                                        Work From Home
+                                    </Text>
+                                </TouchableOpacity>
+
+                            </View>
+                        )}
                         {/* LEAVE (Manager Mode) */}
                         <TouchableOpacity
                             style={[
@@ -190,7 +259,7 @@ const CustomDrawerContent = (props) => {
                                 </TouchableOpacity>
                             </View>
                         )}
-                        
+
                         {/* Manager-specific actions can be added here later */}
                     </>
                 )}
