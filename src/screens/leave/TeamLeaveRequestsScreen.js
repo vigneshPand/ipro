@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Icons from 'react-native-vector-icons/Feather';
 import { COLORS } from '../../utils/theme';
@@ -24,6 +23,7 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const userMailRef = useRef(null);
     const isInitialMount = useRef(true);
@@ -92,15 +92,26 @@ const TeamLeaveRequestsScreen = ({ navigation }) => {
         debouncedSearch(text);
     }, [debouncedSearch]);
 
-    // ─── On screen focus → fetch only if not triggered by search ───
-    useFocusEffect(
-        useCallback(() => {
-            if (!searchQuery) {
-                fetchData('');
-            }
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [fetchData, filters])
-    );
+    // ─── Reset on screen focus ───
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            setSearchQuery('');
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, updateFilters, resetPending, resetHistory]);
+
+    // ─── Fetch only if not triggered by search ───
+    useEffect(() => {
+        if (!searchQuery) {
+            fetchData('');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchData, filters, focusTrigger]);
 
     // ─── Reset list when filters change (not on mount) ───
     useEffect(() => {

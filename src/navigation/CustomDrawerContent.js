@@ -14,7 +14,7 @@ const CustomDrawerContent = (props) => {
     const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
     const [isLeaveExpanded, setIsLeaveExpanded] = useState(false);
     const [userProfile, setUserProfile] = useState(null);
-    const { activeTab } = useRoleStore();
+    const { activeTab, clearRoles } = useRoleStore();
 
     const [overlay, setOverlay] = useState({
         visible: false,
@@ -81,6 +81,7 @@ const CustomDrawerContent = (props) => {
             'Do you want to logout?',
             async () => {
                 try {
+                    clearRoles();
                     await AuthService.signOut();
                     navigation.reset({
                         index: 0,

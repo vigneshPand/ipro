@@ -243,10 +243,10 @@ const useTeamRegularizationStore = create((set, get) => ({
     },
 
     // ── Transfer ─────────────────────────────────────────────
-    transferRequest: async (requestId, managerId) => {
+    transferRequest: async (requestId, managerUserId) => {
         try {
-            const response = await apiClient.put('/regularizationRecord/transfer', null, {
-                params: { requestId, assignToUserId: managerId },
+            const response = await apiClient.get('/regularizationRecord/transferTo', {
+                params: { requestId, managerUserId },
             });
             return {
                 success: true,

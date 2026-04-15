@@ -10,6 +10,7 @@ import LoadingOverlay from '../LoadingOverlay';
 import LeaveAttachmentService from '../../services/LeaveAttachmentService';
 import ApprovalPendingWithSection from './ApprovalPendingWithSection';
 import { formatMinutesToTime } from '../../utils/dateUtils';
+import useDashboardStore from '../../store/useDashboardStore';
 
 const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -145,6 +146,14 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
 
         if (res.success) {
             setShowWithdrawModal(false); // Close withdraw modal immediately
+
+            const { triggerWFHRefresh, triggerLeaveRefresh } = useDashboardStore.getState();
+            if (isWFH) {
+                triggerWFHRefresh();
+            } else {
+                triggerLeaveRefresh();
+            }
+
             showSuccess(res.message, () => {
                 hideOverlay();
                 onClose();
@@ -283,6 +292,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
         }
     };
 
+    const status = selectedLeaveDetails?.status?.toLowerCase();
     return (
         <Modal
             visible={visible}
@@ -293,7 +303,7 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
             <View style={styles.modalOverlay}>
                 <View style={styles.modalCard}>
                     <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Leave Details</Text>
+                        <Text style={styles.headerTitle}>{!isWFH ? 'Leave Details' : 'WFH Details'}</Text>
                         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                             <Icon name="close" size={24} color="#374151" />
                         </TouchableOpacity>
@@ -363,15 +373,25 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                             </View>
 
                             {/* Reviewed By */}
-                            {showWithdraw && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>
+                                    {
+                                        status === 'pending' || status === "withdraw"
+                                            ? 'Approval Pending With' : status === "approved" ? 'Approved By' : status === "transfer" ? 'Reviewed By'
+                                                : status === 'rejected'
+                                                    ? 'Rejected By'
+                                                    : 'Reviewed By'
+                                    }                                    </Text>
+                                <Text style={styles.detailValue}>{selectedLeaveDetails.reviewByName || 'N/A'}</Text>
+                            </View>
+                            {/* {selectedLeaveDetails?.reviewByName && (
                                 <View style={styles.detailRow}>
                                     <Text style={styles.detailLabel}>
-                                        {selectedLeaveDetails.status?.toLowerCase() === 'pending' ? 'Approval Pending ' : 'Reviewed By'}
+                                        Reviewed By
                                     </Text>
                                     <Text style={styles.detailValue}>{selectedLeaveDetails.reviewByName || 'N/A'}</Text>
                                 </View>
-                            )}
-
+                            )} */}
                             {/* Leave Dates / Duration */}
                             {selectedLeaveDetails.days && selectedLeaveDetails.days.length > 0 && (
                                 <View style={styles.sectionBlock}>
@@ -404,11 +424,19 @@ const LeaveHistoryDetailsModal = ({ visible, onClose, showWithdraw, onWithdrawSu
                             </View>
 
                             {/* Withdraw reason */}
-                            {!showWithdraw && externalLeaveDetails == undefined && (
+                            {!showWithdraw && externalLeaveDetails === undefined && selectedLeaveDetails?.withdrawComment && (
                                 <View style={styles.reasonBlock}>
                                     <Text style={styles.detailLabel}>Withdraw Comments</Text>
                                     <View style={styles.reasonValueBox}>
                                         <Text style={styles.reasonValueText}>{selectedLeaveDetails.withdrawComment || 'N/A'}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            {selectedLeaveDetails?.remarks && (
+                                <View style={styles.reasonBlock}>
+                                    <Text style={styles.detailLabel}>Approver Comments</Text>
+                                    <View style={styles.reasonValueBox}>
+                                        <Text style={styles.reasonValueText}>{selectedLeaveDetails?.remarks || 'N/A'}</Text>
                                     </View>
                                 </View>
                             )}

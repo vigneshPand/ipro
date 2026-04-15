@@ -51,6 +51,7 @@ const TeamRegularizationScreen = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [managerUserId, setManagerUserId] = useState(null);
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const isInitialMount = useRef(true);
 
@@ -110,7 +111,21 @@ const TeamRegularizationScreen = ({ navigation }) => {
         debouncedSearch(text);
     }, [debouncedSearch]);
 
-    // ── Trigger fetch on mount and tab change ──
+    // ── Reset on screen focus ──
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            setSearchQuery('');
+            resetForTabSwitch();
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, resetForTabSwitch, updateFilters, resetPending, resetHistory]);
+
+    // ── Trigger fetch on mount, tab change, focus change ──
     // Only trigger when activeTab changes OR managerUserId is set
     useEffect(() => {
         // Initial load: When managerUserId is set, fetch initial 'Pending' tab
@@ -124,11 +139,7 @@ const TeamRegularizationScreen = ({ navigation }) => {
             performFetch(activeTab, searchQuery, filters);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, managerUserId, filters]);
-
-    useEffect(() => () => {
-        // Cleanup if needed
-    }, []);
+    }, [activeTab, managerUserId, filters, focusTrigger]);
 
     // ── Tab switch ──
     const handleTabChange = (tab) => {
@@ -329,8 +340,6 @@ const TeamRegularizationScreen = ({ navigation }) => {
         </SafeAreaView>
     );
 };
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     container: {

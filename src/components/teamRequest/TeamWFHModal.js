@@ -1,19 +1,3 @@
-/**
- * TeamWFHModal
- * ──────────────────────────────────────────────────────────────────────
- * Manager-flow detail modal for WFH requests.
- * Mirrors TeamRegularizationModal but is simpler (no entries/previous toggle).
- *
- * Props
- * ─────────────────────────────────────────────────────────────────────
- * visible          boolean
- * onClose          () => void
- * store            useTeamWFHStore instance
- * managerUserId    number
- * isPending        boolean
- * onActionSuccess  () => void
- */
-
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
@@ -33,9 +17,6 @@ import AuthService from '../../services/AuthService';
 
 import { formatDate } from '../../utils/dateUtils';
 import { getStatusColor } from '../../utils/statusUtils';
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
 const TeamWFHModal = ({
     visible,
     onClose,
@@ -57,15 +38,15 @@ const TeamWFHModal = ({
     const { managers, fetchManagers } = useManagerStore();
 
     const [showRejectModal, setShowRejectModal] = useState(false);
-    const [actionLoading, setActionLoading]     = useState(false);
-    const [isTransferring, setIsTransferring]   = useState(false);
-    const [overlay, setOverlay]                 = useState({
+    const [actionLoading, setActionLoading] = useState(false);
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [overlay, setOverlay] = useState({
         visible: false, message: '', type: 'loading', onConfirm: null, onCancel: null,
     });
 
     const hideOverlay = useCallback(() => setOverlay(prev => ({ ...prev, visible: false })), []);
     const showSuccess = useCallback((msg, onConfirm = hideOverlay) => setOverlay({ visible: true, message: msg, type: 'success', onConfirm }), [hideOverlay]);
-    const showError   = useCallback((msg) => setOverlay({ visible: true, message: msg, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
+    const showError = useCallback((msg) => setOverlay({ visible: true, message: msg, type: 'error', onConfirm: hideOverlay }), [hideOverlay]);
 
     useEffect(() => {
         if (visible) {
@@ -88,7 +69,8 @@ const TeamWFHModal = ({
     const handleApprove = async () => {
         if (!selectedItem || !managerUserId) return;
         setActionLoading(true);
-        const res = await approveRequest(selectedItem.requestId, managerUserId);
+        const remarks = '';
+        const res = await approveRequest(selectedItem?.id, managerUserId, remarks);
         setActionLoading(false);
         if (res.success) {
             showSuccess(res.message || 'Approved Successfully', () => {
@@ -106,7 +88,7 @@ const TeamWFHModal = ({
     const handleReject = async (remarks) => {
         if (!selectedItem || !managerUserId) return;
         setActionLoading(true);
-        const res = await rejectRequest(selectedItem.requestId, managerUserId, remarks);
+        const res = await rejectRequest(selectedItem?.id, managerUserId, remarks);
         setActionLoading(false);
         setShowRejectModal(false);
         if (res.success) {
@@ -125,7 +107,7 @@ const TeamWFHModal = ({
     const handleTransfer = async (managerId) => {
         if (!selectedItem) return;
         setIsTransferring(true);
-        const res = await transferRequest(selectedItem.requestId, managerId);
+        const res = await transferRequest(selectedItem?.id, managerId);
         setIsTransferring(false);
         if (res.success) {
             showSuccess(res.message || 'Transferred Successfully', () => {
@@ -140,6 +122,7 @@ const TeamWFHModal = ({
         }
     };
 
+    const status = detailsData?.status?.toLowerCase();
     return (
         <Modal
             visible={visible}
@@ -174,26 +157,18 @@ const TeamWFHModal = ({
                         >
                             {/* Status badge */}
                             <View style={styles.badgeRow}>
-                                <View style={[styles.badge, { backgroundColor: getStatusColor(detailsData.status || 'pending') }]}>
-                                    <Text style={styles.badgeText}>{(detailsData.status || 'PENDING').toUpperCase()}</Text>
+                                <View style={[styles.badge, { backgroundColor: getStatusColor(detailsData.status || selectedItem?.status || 'pending') }]}>
+                                    <Text style={styles.badgeText}>{(detailsData.status || selectedItem?.status || 'PENDING').toUpperCase()}</Text>
                                 </View>
                             </View>
 
                             {/* Employee name */}
-                            {selectedItem?.userName ? (
+                            {detailsData.userName || selectedItem?.userName ? (
                                 <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Name</Text>
-                                    <Text style={styles.detailValue}>{selectedItem.userName}</Text>
+                                    <Text style={styles.detailLabel}>Employee Name</Text>
+                                    <Text style={styles.detailValue}>{detailsData.userName || selectedItem?.userName}</Text>
                                 </View>
                             ) : null}
-
-                            {/* Status */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Status</Text>
-                                <Text style={[styles.detailValue, { color: getStatusColor(detailsData.status || 'pending') }]}>
-                                    {detailsData.status || 'Pending'}
-                                </Text>
-                            </View>
 
                             {/* Manager Transfer Section for Pending Team Flow */}
                             {isPending && (
@@ -201,9 +176,15 @@ const TeamWFHModal = ({
                                     managers={managers}
                                     onTransfer={handleTransfer}
                                     isLoading={isTransferring}
-                                    currentManagerName={detailsData.approvedByName || detailsData.pendingWith || selectedItem.pendingWith}
+                                    currentManagerName={detailsData.reviewByName || detailsData.approvedByName || detailsData.pendingWith || selectedItem?.pendingWith}
                                 />
                             )}
+
+                            {/* Leave Type */}
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Leave Type</Text>
+                                <Text style={styles.detailValue}>{detailsData.type || 'Work From Home'}</Text>
+                            </View>
 
                             {/* Applied On */}
                             <View style={styles.detailRow}>
@@ -211,27 +192,59 @@ const TeamWFHModal = ({
                                 <Text style={styles.detailValue}>{formatDate(detailsData.appliedOn)}</Text>
                             </View>
 
-                            {/* WFH Date */}
+                            {/* No of Days */}
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>WFH Date</Text>
-                                <Text style={styles.detailValue}>{formatDate(detailsData.startDate || detailsData.date)}</Text>
+                                <Text style={styles.detailLabel}>No of Days</Text>
+                                <Text style={styles.detailValue}>{detailsData.noOfDays || selectedItem?.noOfDays}</Text>
                             </View>
 
                             {/* Approval Pending With (ReadOnly if not pending) */}
                             {!isPending && (
                                 <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Approved By</Text>
-                                    <Text style={styles.detailValue}>{detailsData.approvedByName || detailsData.pendingWith || '-'}</Text>
+                                    <Text style={styles.detailLabel}>
+                                        {
+                                            status === 'pending' || status === 'transfer' || status === "withdraw"
+                                                ? 'Approval Pending With' : status === "approved" ? 'Approved By'
+                                                    : status === 'rejected'
+                                                        ? 'Rejected By'
+                                                        : 'Reviewed By'
+                                        }                                    </Text>
+                                    <Text style={styles.detailValue}>{detailsData?.reviewByName || 'N/A'}</Text>
+                                </View>
+                            )}
+
+                            {/* Dates / Duration */}
+                            {detailsData.days && detailsData.days.length > 0 && (
+                                <View style={styles.sectionBlock}>
+                                    <Text style={styles.sectionTitle}>Duration</Text>
+                                    <Text style={styles.durationRange}>
+                                        {formatDate(detailsData.days[0].date)} - {formatDate(detailsData.days[detailsData.days.length - 1].date)}
+                                    </Text>
                                 </View>
                             )}
 
                             {/* Reason */}
-                            {detailsData.reason ? (
-                                <View style={styles.reasonBlock}>
-                                    <Text style={styles.reasonLabel}>Reason</Text>
-                                    <Text style={styles.reasonValue}>{detailsData.reason}</Text>
+                            <View style={styles.reasonBlockContainer}>
+                                <Text style={styles.detailLabel}>Reason</Text>
+                                <View style={styles.reasonValueBox}>
+                                    <Text style={styles.reasonValueText}>{detailsData.reason || 'N/A'}</Text>
                                 </View>
-                            ) : null}
+                            </View>
+
+                            {/* CC Members */}
+                            {detailsData.cc && detailsData.cc.length > 0 && (
+                                <View style={styles.sectionBlock}>
+                                    <Text style={styles.sectionTitle}>CC</Text>
+                                    <View style={styles.ccContainer}>
+                                        {detailsData.cc.map((person, index) => (
+                                            <View key={index} style={styles.ccBadge}>
+                                                <Text style={styles.ccBadgeText}>{person}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
 
                             {/* ── Approve / Reject actions (Pending only) ── */}
                             {isPending && (
@@ -275,8 +288,6 @@ const TeamWFHModal = ({
         </Modal>
     );
 };
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     overlay: {
@@ -326,17 +337,58 @@ const styles = StyleSheet.create({
         borderBottomColor: '#f3f4f6',
     },
     detailLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500', flex: 1 },
-    detailValue: { fontSize: 13, color: '#1f2937', fontWeight: '600', flex: 1.5, textAlign: 'right' },
-    reasonBlock: {
-        backgroundColor: '#f0f9ff',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 14,
-        borderLeftWidth: 3,
-        borderLeftColor: '#0ea5e9',
+    detailValue: { fontSize: 14, color: '#1f2937', fontWeight: '600', flex: 1.5, textAlign: 'right' },
+    sectionBlock: {
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#f3f4f6',
     },
-    reasonLabel: { fontSize: 11, color: '#0369a1', fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
-    reasonValue: { fontSize: 13, color: '#0c4a6e' },
+    sectionTitle: {
+        fontSize: 14,
+        color: '#6b7280',
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    durationRange: {
+        fontSize: 14,
+        color: '#1f2937',
+        fontWeight: '500',
+        marginTop: 4,
+    },
+    reasonBlockContainer: {
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#f3f4f6',
+    },
+    reasonValueBox: {
+        marginTop: 8,
+        backgroundColor: '#f9fafb',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    reasonValueText: {
+        fontSize: 14,
+        color: '#374151',
+        lineHeight: 20,
+    },
+    ccContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    ccBadge: {
+        backgroundColor: '#fef3c7',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    ccBadgeText: {
+        fontSize: 12,
+        color: '#92400e',
+        fontWeight: '500',
+    },
     teamActionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -351,10 +403,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    approveBtn: { backgroundColor: '#10b981' },
-    rejectBtn:  { backgroundColor: '#ef4444' },
-    approveText: { color: '#fff', fontWeight: 'bold', fontSize: 13, letterSpacing: 0.5 },
-    rejectText: { color: '#fff', fontWeight: 'bold', fontSize: 13, letterSpacing: 0.5 },
+    rejectBtn: {
+        backgroundColor: '#f3f0f0ff',
+        borderWidth: 1,
+        borderColor: '#f22121ff',
+    },
+    approveBtn: {
+        backgroundColor: '#348beeff',
+    },
+    rejectText: {
+        color: '#f22121ff',
+        fontWeight: 'bold',
+        fontSize: 15,
+        letterSpacing: 0.5,
+    },
+    approveText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 15,
+        letterSpacing: 0.5,
+    },
 });
 
 export default TeamWFHModal;

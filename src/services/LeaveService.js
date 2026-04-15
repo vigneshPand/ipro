@@ -196,7 +196,7 @@ class LeaveService {
     async rejectLeave(requestId, managerId, remarks) {
         try {
             const response = await apiClient.put(
-                '/leave/approve',
+                '/leave/reject',
                 null,
                 {
                     params: {

@@ -167,6 +167,7 @@ const TeamRegularizationModal = ({
     const rows = buildEntryRows(entriesToShow);
     const toggleLabel = isPreviousView ? 'See Updated Entries' : 'See Previous Entries';
 
+    const status = detailsData?.status?.toLowerCase();
     return (
         <Modal
             visible={visible}
@@ -247,8 +248,15 @@ const TeamRegularizationModal = ({
                             {/* Approval Pending With (ReadOnly if not pending) */}
                             {!isPending && (
                                 <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Approved By</Text>
-                                    <Text style={styles.detailValue}>{detailsData.approvedByName || detailsData.pendingWith || '-'}</Text>
+                                    <Text style={styles.detailLabel}>
+                                        {
+                                            status === 'pending' || status === 'transfer' || status === "withdraw"
+                                                ? 'Approval Pending With' : status === "approved" ? 'Approved By'
+                                                    : status === 'rejected'
+                                                        ? 'Rejected By'
+                                                        : 'Reviewed By'
+                                        }                                    </Text>
+                                    <Text style={styles.detailValue}>{detailsData?.reviewByName || detailsData?.approvedByName}</Text>
                                 </View>
                             )}
 

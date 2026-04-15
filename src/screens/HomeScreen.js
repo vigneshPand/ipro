@@ -160,7 +160,7 @@ const HomeScreen = ({ route, navigation }) => {
         }
     }, [showLoading, hideOverlay, showError, fetchRoles]);
 
-    const fetchTeamData = React.useCallback(async (isRefreshing = false) => {
+    const fetchTeamData = useCallback(async (isRefreshing = false) => {
         // Avoid duplicate calls unless refreshing
         if (!isRefreshing && (teamSummary || teamActivity.length > 0)) return;
 
@@ -192,10 +192,10 @@ const HomeScreen = ({ route, navigation }) => {
     }, [teamSummary, teamActivity]);
 
     useEffect(() => {
-        if (activeTab === 'Team') {
+        if (activeTab === 'Team' && hasManagerRole) {
             fetchTeamData();
         }
-    }, [activeTab, fetchTeamData]);
+    }, [activeTab, fetchTeamData, hasManagerRole]);
 
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);
@@ -554,19 +554,19 @@ const HomeScreen = ({ route, navigation }) => {
                                     <SummaryCard
                                         label="Pending"
                                         value={teamSummary?.pending}
-                                        color="#f39c12"
+                                        color="#dc4b32ff"
                                         icon="exclamation-circle"
                                     />
                                     <SummaryCard
                                         label="On Leave"
                                         value={teamSummary?.onLeave}
-                                        color={COLORS.error}
+                                        color='#f39c12'
                                         icon="calendar-times-o"
                                     />
                                     <SummaryCard
                                         label="Checked Out"
                                         value={teamSummary?.checkOut}
-                                        color="#9b59b6"
+                                        color={COLORS.error}
                                         isFullWidth
                                         icon="sign-out"
                                     />

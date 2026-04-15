@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import {
+    View,
+    Text,
+    Image,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    ScrollView
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 
-const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hideCCField = false }) => {
+const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, nameList = [], leaveType = '', hideCCField = false }) => {
     const [ccSearch, setCCSearch] = useState("");
     const [showCCDropdown, setShowCCDropdown] = useState(false);
+    const isWFH = leaveType === 'Work From Home';
 
-    const filteredCC = ccList.filter(user =>
+    const filteredCC = (Array.isArray(ccList) ? ccList : []).filter(user =>
         user?.name?.toLowerCase().includes(ccSearch.toLowerCase())
     );
 
@@ -27,10 +36,28 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
 
     return (
         <View style={styles.reportsToSection}>
-            {!hideCCField && (
+            {isWFH ? (
+                // WFH: Show only nameList without search and selection
+                <View style={styles.wfhNameContainer}>
+                    <Text style={styles.label}>CC Members</Text>
+                    <View style={styles.ccChipContainer}>
+                        {Array.isArray(nameList) && nameList.length > 0 ? (
+                            nameList.map((name, index) => (
+                                <View key={`api-${index}`} style={styles.ccChip}>
+                                    <Text style={styles.ccChipText}>{name}</Text>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.noValueText}>No CC members</Text>
+                        )}
+                    </View>
+                </View>
+            ) : !hideCCField ? (
+                // Non-WFH: Show search, nameList, and selected CC
                 <>
                     <View style={styles.reportsToHeader}>
                         <Text style={styles.label}>Reports to</Text>
+
                         <View style={styles.searchContainer}>
                             <TextInput
                                 placeholder="Search CC member"
@@ -43,9 +70,15 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
                                 }}
                                 style={styles.ccSearchInput}
                             />
+
                             {showCCDropdown && ccSearch.trim().length > 0 && (
                                 <View style={styles.dropdownList}>
-                                    <ScrollView nestedScrollEnabled={true}>
+                                    <ScrollView
+                                        nestedScrollEnabled
+                                        keyboardShouldPersistTaps="handled"
+                                        showsVerticalScrollIndicator
+                                        style={{ maxHeight: 250 }}
+                                    >
                                         {filteredCC.length > 0 ? (
                                             filteredCC.map(user => (
                                                 <TouchableOpacity
@@ -53,12 +86,16 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
                                                     style={styles.dropdownItem}
                                                     onPress={() => handleSelectCC(user)}
                                                 >
-                                                    <Text style={styles.dropdownItemText}>{user.name}</Text>
+                                                    <Text style={styles.dropdownItemText}>
+                                                        {user.name}
+                                                    </Text>
                                                 </TouchableOpacity>
                                             ))
                                         ) : (
                                             <View style={styles.dropdownItem}>
-                                                <Text style={styles.dropdownItemText}>No members found</Text>
+                                                <Text style={styles.dropdownItemText}>
+                                                    No members found
+                                                </Text>
                                             </View>
                                         )}
                                     </ScrollView>
@@ -68,17 +105,29 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
                     </View>
 
                     <View style={styles.ccChipContainer}>
+                        {/* API Values - nameList (no remove icon) */}
+                        {Array.isArray(nameList) &&
+                            nameList.map((name, index) => (
+                                <View key={`api-${index}`} style={styles.ccChip}>
+                                    <Text style={styles.ccChipText}>{name}</Text>
+                                </View>
+                            ))}
+
+                        {/* Selected Values - selectedCC (with remove icon) */}
                         {selectedCC.map(user => (
                             <View key={user.userId} style={styles.ccChip}>
                                 <Text style={styles.ccChipText}>{user.name}</Text>
-                                <TouchableOpacity onPress={() => removeCC(user.userId)} style={styles.removeIcon}>
+                                <TouchableOpacity
+                                    onPress={() => removeCC(user.userId)}
+                                    style={styles.removeIcon}
+                                >
                                     <Icon name="close" size={14} color="#6b7280" />
                                 </TouchableOpacity>
                             </View>
                         ))}
                     </View>
                 </>
-            )}
+            ) : null}
 
             <View style={styles.managerProfileRow}>
                 {managerInfo.profile ? (
@@ -101,8 +150,8 @@ const ReportsToSection = ({ managerInfo, ccList, selectedCC, setSelectedCC, hide
 const styles = StyleSheet.create({
     reportsToSection: {
         marginTop: 5,
-        zIndex: 1,
-        elevation: 1,
+        zIndex: 10,
+        elevation: 10,
     },
     reportsToHeader: {
         flexDirection: 'row',
@@ -115,9 +164,10 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     searchContainer: {
-        width: 160,
+        width: 180,
         position: 'relative',
-        zIndex: 50,
+        zIndex: 999,
+        elevation: 999,
     },
     ccSearchInput: {
         height: 34,
@@ -138,13 +188,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e5e7eb',
         borderRadius: 6,
-        maxHeight: 150,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        zIndex: 100,
+        maxHeight: 250,
+        zIndex: 9999,
+        elevation: 10,
     },
     dropdownItem: {
         paddingVertical: 8,
@@ -180,6 +226,14 @@ const styles = StyleSheet.create({
     },
     removeIcon: {
         marginLeft: 2,
+    },
+    wfhNameContainer: {
+        marginTop: 5,
+    },
+    noValueText: {
+        fontSize: 12,
+        color: '#9ca3af',
+        fontStyle: 'italic',
     },
     managerProfileRow: {
         flexDirection: 'row',

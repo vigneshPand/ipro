@@ -1,7 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
 import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
@@ -17,10 +16,11 @@ const LeaveHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [modalVisible, setModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const {
-        pendingLeaves, loadingPending, fetchPendingLeaves, fetchNextPendingPage,
-        historyLeaves, historyLoading, fetchHistoryLeaves, fetchNextHistoryPage,
+        pendingLeaves, loadingPending, fetchPendingLeaves, fetchNextPendingPage, resetPending,
+        historyLeaves, historyLoading, fetchHistoryLeaves, fetchNextHistoryPage, resetHistory,
         fetchLeaveDetails,
     } = useLeaveStore();
 
@@ -82,19 +82,27 @@ const LeaveHistoryScreen = ({ navigation }) => {
         }
     }, [activeTab, buildQueryParams, fetchNextPendingPage, fetchNextHistoryPage]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchData();
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [fetchData, filters])
-    );
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, updateFilters, resetPending, resetHistory]);
+
+    // Fetch when tab, filters, or focus changes
+    useEffect(() => {
+        fetchData();
+    }, [fetchData, filters, focusTrigger]);
 
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
-        const { resetPending, resetHistory } = useLeaveStore.getState();
-        resetPending();
-        resetHistory();
+        if (typeof resetPending === 'function') resetPending();
+        if (typeof resetHistory === 'function') resetHistory();
         if (tab === 'History') {
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, leaveTypes: [], status: [], pageNo: 0 });
@@ -177,7 +185,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={pendingLeaves}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                        keyExtractor={(item, index) => item?.id ? `${item.id}-${index}` : `pending-${index}`}
                         renderItem={({ item }) => (
                             <PendingLeaveCard
                                 type={item?.type || ''}

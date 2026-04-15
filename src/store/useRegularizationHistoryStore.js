@@ -183,6 +183,18 @@ const useRegularizationHistoryStore = create((set, get) => ({
         previousEntries: null,
         isPreviousView: false,
     }),
+
+    resetPending: () => set({
+        pendingList: [],
+        pendingPageNo: 0,
+        pendingTotalPages: 0,
+    }),
+
+    resetHistory: () => set({
+        historyList: [],
+        historyPageNo: 0,
+        historyTotalPages: 0,
+    }),
 }));
 
 export default useRegularizationHistoryStore;

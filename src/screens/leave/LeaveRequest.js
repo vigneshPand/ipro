@@ -7,6 +7,7 @@ import PieChart from '../../components/common/PieChart';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
 import { formatMinutesToTime, parseNumber } from '../../utils/dateUtils';
+import useDashboardStore from '../../store/useDashboardStore';
 
 // Extracted SimplePie logic to components/common/PieChart
 
@@ -136,13 +137,15 @@ const LeaveRequestScreen = ({ navigation }) => {
         }
     }, [fetchLeaveBalances]);
 
+    const { refreshLeave } = useDashboardStore();
+
     useEffect(() => {
         const init = async () => {
             await loadData();
             setInitialLoad(false);
         };
         init();
-    }, [loadData]);
+    }, [loadData, refreshLeave]);
 
     const onRefresh = async () => {
         setRefreshing(true);

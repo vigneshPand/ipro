@@ -100,6 +100,7 @@ const AttendanceGridScreen = ({ navigation }) => {
         const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Sun
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
         const todayDate = today.getDate();
 
@@ -133,6 +134,10 @@ const AttendanceGridScreen = ({ navigation }) => {
         // Actual days
         for (let day = 1; day <= daysInMonth; day++) {
             const data = dataMap[day] || {};
+            const cellDate = new Date(year, month, day);
+            cellDate.setHours(0, 0, 0, 0);
+            const isFutureDate = cellDate > today;
+
             gridItems.push({
                 key: `day-${day}`,
                 isEmpty: false,
@@ -148,8 +153,10 @@ const AttendanceGridScreen = ({ navigation }) => {
                 wfhStatus: data.wfhStatus || null,
                 hasPendingOrTransferRegularization:
                     data.hasPendingOrTransferRegularization || false,
+                wfhId: data.wfhId || null,
+                leaveId: data.leaveId || null,
                 isToday: isCurrentMonth && day === todayDate,
-                isFuture: isCurrentMonth && day > todayDate,
+                isFuture: isFutureDate,
                 rawData: data,
             });
         }
@@ -200,6 +207,10 @@ const AttendanceGridScreen = ({ navigation }) => {
             item.permissionStatus === 'Pending' ||
             (item.permissionMinutes != null && item.permissionMinutes !== '');
 
+        const hasWFH = item?.wfhId && item?.wfhStatus;
+        const hasLeave = item?.leaveId && item?.leaveStatus;
+        const hasRegularization = item?.hasPendingOrTransferRegularization;
+
         const isValidStatus =
             item.status === 'Present' ||
             item.wfhStatus === 'Pending' ||
@@ -212,12 +223,14 @@ const AttendanceGridScreen = ({ navigation }) => {
                     item.leaveType.toLowerCase() === 'secondhalf')) ||
             item.regularizationStatus;
 
+        // Check if item has overriding request data
+        const overrides = hasWFH || hasLeave || hasRegularization || isPermissionPending;
+
         const canPress =
             !item.isTrailing && // still block next month
             (
-                (!item.isFuture) || isPermissionPending
-            ) &&
-            isValidStatus;
+                overrides || (!item.isFuture && isValidStatus)
+            );
 
         if (!canPress) return;
 
@@ -393,6 +406,7 @@ const AttendanceGridScreen = ({ navigation }) => {
                 date={editDate}
                 userId={userId}
                 headerLabel={editHeaderLabel}
+                navigation={navigation}
                 onSubmitSuccess={() => {
                     closeEditModal();
                     loadData(); // Refresh the grid data after successful submission

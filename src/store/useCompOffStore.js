@@ -165,6 +165,18 @@ const useCompOffStore = create((set, get) => ({
         if (historyLoading || historyPageNo + 1 >= historyTotalPages) return;
         await get().fetchHistoryCompOff(year, startDate, endDate, historyPageNo + 1, extraParams);
     },
+
+    resetPending: () => set({
+        pendingList: [],
+        pendingPageNo: 0,
+        pendingTotalPages: 0,
+    }),
+
+    resetHistory: () => set({
+        historyList: [],
+        historyPageNo: 0,
+        historyTotalPages: 0,
+    }),
 }));
 
 export default useCompOffStore;

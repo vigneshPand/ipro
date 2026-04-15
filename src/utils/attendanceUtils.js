@@ -44,7 +44,7 @@ export const getStatusLabel = (item) => {
         case 'Holiday': return '(H)';
         case 'Leave': return '(L)';
         case 'Pending Approval': return '';
-        default: return '-';
+        default: return '';
     }
 };
 
@@ -57,7 +57,7 @@ export const getBackgroundColor = (item) => {
     if (status === 'Absent') return STATUS_COLORS.Absent;
     if (status === 'Week-Off') return STATUS_COLORS['Week-Off'];
     if (status === 'Holiday') return STATUS_COLORS.Holiday;
-    if (status === 'Pending Approval') return STATUS_COLORS['Pending Approval'];
+    if (status === 'Pending Approval' || status === "WFH") return STATUS_COLORS['Pending Approval'];
 
     return '#ffffff';
 };

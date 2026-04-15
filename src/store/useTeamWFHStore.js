@@ -116,13 +116,13 @@ const useTeamWFHStore = create((set, get) => ({
 
     // ── Detail Modal API ─────────────────────────────────────
     /**
-     * GET /api/leave/findWFHByRequestId?id=<requestId>
+     * GET /api/leave/leaveRequestById?requestId=<requestId>&startDate=<startDate>&endDate=<endDate>
      */
-    fetchDetails: async (requestId) => {
+    fetchDetails: async (requestId, startDate, endDate) => {
         set({ loadingDetails: true, detailsData: null });
         try {
-            const response = await apiClient.get('/leave/findWFHByRequestId', {
-                params: { id: requestId },
+            const response = await apiClient.get('/leave/leaveRequestById', {
+                params: { requestId, startDate, endDate },
             });
             set({ detailsData: response.data || null, loadingDetails: false });
         } catch (error) {
@@ -149,19 +149,30 @@ const useTeamWFHStore = create((set, get) => ({
     clearManagerDropdownCache: () => set({ managerDropdown: [] }),
 
     // ── Approve ──────────────────────────────────────────────
-    approveRequest: async (requestId, managerId) => {
+    approveRequest: async (requestId, managerId, remarks) => {
         try {
-            const response = await apiClient.put('/leave/approveWFH', null, {
-                params: { requestId, managerId },
+            const response = await apiClient.put('/leave/approve', null, {
+                params: {
+                    requestId,
+                    managerId,
+                    remarks,
+                },
             });
+
             return {
                 success: true,
-                message: response?.data?.message || response?.data || 'Approved Successfully',
+                message:
+                    response?.data?.message ||
+                    response?.data ||
+                    'Approved Successfully',
             };
         } catch (error) {
             return {
                 success: false,
-                message: error?.response?.data?.message || error?.message || 'Failed to approve',
+                message:
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    'Failed to approve',
             };
         }
     },
@@ -169,7 +180,7 @@ const useTeamWFHStore = create((set, get) => ({
     // ── Reject ───────────────────────────────────────────────
     rejectRequest: async (requestId, managerId, remarks = '') => {
         try {
-            const response = await apiClient.put('/leave/rejectWFH', null, {
+            const response = await apiClient.put('/leave/reject', null, {
                 params: { requestId, managerId, remarks },
             });
             return {

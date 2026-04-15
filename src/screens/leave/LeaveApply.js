@@ -9,14 +9,18 @@ import DatePickerField from '../../components/leave/DatePickerField';
 import HalfDaySelector from '../../components/leave/HalfDaySelector';
 import ReportsToSection from '../../components/leave/ReportsToSection';
 import useLeaveRequestStore from '../../store/useLeaveRequestStore';
-import useLeaveStore from '../../store/useLeaveStore';
+import useDashboardStore from '../../store/useDashboardStore';
+import useRoleStore from '../../store/useRoleStore';
 import { COLORS } from '../../utils/theme';
 import LoadingOverlay from '../../components/LoadingOverlay';
 
 import { formatToAPI, parseAPIDate, formatDate, formatPermissionTime, convertTimeToMinutes, formatMinutesToTime } from '../../utils/dateUtils';
 
 const LeaveApplyScreen = ({ navigation, route }) => {
-    const { leaveType, balance, isWFHCheckInFlow = false, onWFHApplySuccess = null } = route.params;
+    const { leaveType, balance, isWFHCheckInFlow = false, onWFHApplySuccess = null, prefilledDate = null } = route.params;
+
+    const { hasEmployeeRole, hasAdminRole, hasManagerRole } = useRoleStore();
+    const showSearchCC = hasEmployeeRole && !hasAdminRole && !hasManagerRole;
 
     // Date state
     const [fromDate, setFromDate] = useState(null);
@@ -126,6 +130,32 @@ const LeaveApplyScreen = ({ navigation, route }) => {
         }
     }, [isWFHCheckInFlow]);
 
+    // ─── Pre-fill date from Regularization → WFH redirect ───
+    useEffect(() => {
+        if (prefilledDate && !isWFHCheckInFlow) {
+            const parsed = parseAPIDate(prefilledDate); // uses existing utility
+            if (parsed) {
+                setFromDate(parsed);
+                setToDate(parsed);
+            }
+        }
+        // Run once on mount — intentionally no dep on prefilledDate to avoid re-run on navigation changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ─── Native Modal Overlap Fix: Restore Regularization Modal on close ───
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('beforeRemove', () => {
+            if (route.params.onReturnToRegularization) {
+                // Call it slightly after to avoid conflicting animations
+                setTimeout(() => {
+                    route.params.onReturnToRegularization();
+                }, 100);
+            }
+        });
+        return unsubscribe;
+    }, [navigation, route.params]);
+
     // ─── Fetch Bereavement Types ───
     useEffect(() => {
         if (leaveType !== 'Bereavement Leave') return;
@@ -216,7 +246,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
             return;
         }
 
-        if (leaveType === 'Permission' || leaveType === 'Work From Home') {
+        if (leaveType === 'Permission') {
             return;
         }
 
@@ -449,16 +479,20 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                 // }
 
                 if (selectedCC.length > 0) {
-                    payload.cc = selectedCC.map(item => item.email).join(',');
+                    payload.cc = selectedCC.map(item => item.email);
                 }
 
                 const response = await submitLeaveRequest(payload);
                 successMsg = response?.message || response?.data
             }
 
-            // Refresh leave balances so LeaveRequest screen updates immediately
-            const { fetchLeaveBalances } = useLeaveStore.getState();
-            fetchLeaveBalances(userId, new Date().getFullYear());
+            // Refresh only the specific module's chart so other charts don't unexpectedly redraw
+            const { triggerWFHRefresh, triggerLeaveRefresh } = useDashboardStore.getState();
+            if (leaveType === 'Work From Home') {
+                triggerWFHRefresh();
+            } else {
+                triggerLeaveRefresh();
+            }
 
             showSuccess(successMsg, () => {
                 navigation.goBack();
@@ -700,6 +734,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                                                     }));
                                                 }}
                                                 formatDate={formatDate}
+                                                leaveType={leaveType}
                                             />
                                         ))}
                                     </View>
@@ -717,10 +752,12 @@ const LeaveApplyScreen = ({ navigation, route }) => {
                         {/* Reports To Section */}
                         <ReportsToSection
                             managerInfo={managerInfo}
-                            ccList={[...ccList, ...nameList].filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i)}
+                            ccList={[...ccList].filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i)}
                             selectedCC={selectedCC}
                             setSelectedCC={setSelectedCC}
-                            hideCCField={isWFHCheckInFlow}
+                            nameList={nameList}
+                            leaveType={leaveType}
+                            hideCCField={!showSearchCC && leaveType === "Work From Home"}
                         />
 
                         {/* Reason Section */}

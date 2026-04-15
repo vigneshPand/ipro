@@ -98,6 +98,7 @@ const RegularizationDetailsModal = ({ visible, onClose, showWithdraw = false, on
 
     const toggleButtonLabel = isPreviousView ? 'See Updated Entries' : 'See Previous Entries';
     const rows = buildEntryRows(entriesToShow);
+    const status = detailsData?.status?.toLowerCase();
 
     return (
         <Modal
@@ -143,8 +144,15 @@ const RegularizationDetailsModal = ({ visible, onClose, showWithdraw = false, on
                             </View>
 
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Approval Pending With</Text>
-                                <Text style={styles.detailValue}>{detailsData.approvedByName || '-'}</Text>
+                                <Text style={styles.detailLabel}>
+                                    {
+                                        status === 'pending' || status === "withdraw"
+                                            ? 'Approval Pending With' : status === "approved" ? 'Approved By' : status === "transfer" ? 'Reviewed By'
+                                                : status === 'rejected'
+                                                    ? 'Rejected By'
+                                                    : 'Reviewed By'
+                                    }                                    </Text>
+                                <Text style={styles.detailValue}>{detailsData?.reviewByName || detailsData?.approvedByName}</Text>
                             </View>
 
                             {/* Entries Section */}

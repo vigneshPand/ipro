@@ -6,6 +6,7 @@ import { COLORS } from '../../utils/theme';
 import PieChart from '../../components/common/PieChart';
 import useLeaveStore from '../../store/useLeaveStore';
 import AuthService from '../../services/AuthService';
+import useDashboardStore from '../../store/useDashboardStore';
 
 const parseNumber = (val) => {
     return parseFloat(val) || 0;
@@ -30,9 +31,11 @@ const WFHRequestScreen = ({ navigation }) => {
         }
     }, [fetchLeaveBalances]);
 
+    const { refreshWFH } = useDashboardStore();
+
     useEffect(() => {
         loadData();
-    }, [loadData]);
+    }, [loadData, refreshWFH]);
 
     const onRefresh = async () => {
         setRefreshing(true);

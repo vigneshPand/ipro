@@ -1,7 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import PendingLeaveCard from '../../components/leave/PendingLeaveCard';
 import HistoryLeaveCard from '../../components/leave/HistoryLeaveCard';
 import LeaveHistoryDetailsModal from '../../components/leave/LeaveHistoryDetailsModal';
@@ -18,10 +17,11 @@ const WFHHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [modalVisible, setModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const {
-        pendingList, loadingPending, fetchPendingWFH, fetchNextPendingPage,
-        historyList, loadingHistory, fetchWFHHistory, fetchNextHistoryPage,
+        pendingList, loadingPending, fetchPendingWFH, fetchNextPendingPage, resetPending,
+        historyList, loadingHistory, fetchWFHHistory, fetchNextHistoryPage, resetHistory,
     } = useWFHStore();
 
     const { fetchLeaveDetails } = useLeaveStore();
@@ -59,20 +59,27 @@ const WFHHistoryScreen = ({ navigation }) => {
         }
     }, [activeTab, buildQueryParams, fetchPendingWFH, fetchWFHHistory]);
 
-    // Fetch on mount and whenever filters or tab change
-    useFocusEffect(
-        useCallback(() => {
-            fetchData();
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [fetchData, filters])
-    );
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, updateFilters, resetPending, resetHistory]);
+
+    // Fetch when tab, filters, or focus changes
+    useEffect(() => {
+        fetchData();
+    }, [fetchData, filters, focusTrigger]);
 
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
-        const { resetPending, resetHistory } = useWFHStore.getState();
-        resetPending();
-        resetHistory();
+        if (typeof resetPending === 'function') resetPending();
+        if (typeof resetHistory === 'function') resetHistory();
         if (tab === 'History') {
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
@@ -181,7 +188,7 @@ const WFHHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={pendingList}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                        keyExtractor={(item, index) => item?.id ? `${item.id}-${index}` : `pending-${index}`}
                         renderItem={({ item }) => (
                             <PendingLeaveCard
                                 type={item?.type || ''}
@@ -221,7 +228,7 @@ const WFHHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={historyList}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                        keyExtractor={(item, index) => item?.id ? `${item.id}-${index}` : `history-${index}`}
                         renderItem={({ item }) => (
                             <HistoryLeaveCard
                                 item={item}

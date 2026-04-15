@@ -24,11 +24,7 @@ import TeamWFHModal from '../../components/teamRequest/TeamWFHModal';
 import useTeamWFHStore from '../../store/useTeamWFHStore';
 import { getMonthRange } from '../../utils/dateUtils';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const DEBOUNCE_MS = 400;
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 
 const TeamWFHScreen = ({ navigation }) => {
 
@@ -38,6 +34,7 @@ const TeamWFHScreen = ({ navigation }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [userEmail, setUserEmail] = useState(null);
     const [managerUserId, setManagerUserId] = useState(null);
+    const [focusTrigger, setFocusTrigger] = useState(0);
     const isInitialMount = useRef(true);
 
     // ── Store ──
@@ -98,7 +95,21 @@ const TeamWFHScreen = ({ navigation }) => {
         debouncedSearch(text);
     }, [debouncedSearch]);
 
-    // ── Trigger fetch on mount and tab change ──
+    // ── Reset on screen focus ──
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            setSearchQuery('');
+            resetForTabSwitch();
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, leaveTypes: [], status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, resetForTabSwitch, updateFilters, resetPending, resetHistory]);
+
+    // ── Trigger fetch on mount, tab change, focus change ──
     useEffect(() => {
         // Initial load: When user info is set, fetch initial 'Pending' tab
         if (isInitialMount.current && userEmail) {
@@ -111,11 +122,7 @@ const TeamWFHScreen = ({ navigation }) => {
             performFetch(activeTab, searchQuery, filters);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, userEmail, filters]);
-
-    useEffect(() => () => {
-        // Cleanup if needed
-    }, []);
+    }, [activeTab, userEmail, filters, focusTrigger]);
 
     // ── Pre-fetch switch cleanup (Optional, but kept for safety) ──
     useEffect(() => {
@@ -176,7 +183,9 @@ const TeamWFHScreen = ({ navigation }) => {
     // ── Card press → open detail modal ──
     const handleCardPress = useCallback((item) => {
         setSelectedItem(item);
-        fetchDetails(item.requestId);
+        const startDate = item.startDate || item.fromDate || item.date;
+        const endDate = item.endDate || item.toDate || item.date;
+        fetchDetails(item?.id, startDate, endDate);
         setModalVisible(true);
     }, [setSelectedItem, fetchDetails]);
 

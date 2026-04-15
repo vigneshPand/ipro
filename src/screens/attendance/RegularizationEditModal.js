@@ -12,6 +12,7 @@ import {
     KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import WFHCheckInConfirmModal from '../../components/common/WFHCheckInConfirmModal';
 import Icons from 'react-native-vector-icons/FontAwesome6';
 import Animated, {
     useSharedValue,
@@ -30,9 +31,6 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const MODE_OPTIONS = ['Home', 'Office', 'Client'];
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Mode Dropdown (PREMIUM UI PRESERVED)
-// ─────────────────────────────────────────────────────────────────────────────
 const ModeDropdown = memo(({ value, onSelect, error }) => {
     const [open, setOpen] = useState(false);
 
@@ -212,9 +210,6 @@ const RowCard = memo(({ row, rowIndex, totalRows, onUpdate, onAdd, onDelete, onO
     );
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Notice Popup (PREMIUM OVERLAY POPUP)
-// ─────────────────────────────────────────────────────────────────────────────
 const NoticePopup = memo(({ visible, message, onOk, isSuccess }) => {
     if (!visible) return null;
 
@@ -299,9 +294,9 @@ const popupStyles = StyleSheet.create({
     },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Main Modal (PREMIUM UI PRESERVED, OPTIMIZED SCROLLING + GLOBAL NATIVE PICKER)
-// ─────────────────────────────────────────────────────────────────────────────
+// Specific backend error that should redirect the user to apply WFH instead.
+const WFH_REDIRECT_ERROR = 'Initial office work hours less than shift required office hours';
+
 const RegularizationEditModal = ({
     visible,
     onClose,
@@ -309,6 +304,7 @@ const RegularizationEditModal = ({
     userId,
     headerLabel, // e.g. "Edit – 09 Mar 2026"
     onSubmitSuccess,
+    navigation, // required for WFH redirect flow
 }) => {
     const translateY = useSharedValue(SCREEN_HEIGHT);
     const [renderModal, setRenderModal] = useState(false);
@@ -335,6 +331,10 @@ const RegularizationEditModal = ({
     const [activeRowId, setActiveRowId] = useState(null);
     const [activeField, setActiveField] = useState(null); // 'inTime' | 'outTime'
     const [pickerValue, setPickerValue] = useState(new Date());
+
+    // ── WFH Redirect Popup State ──
+    const [wfhRedirectVisible, setWfhRedirectVisible] = useState(false);
+    const [isHiddenForNav, setIsHiddenForNav] = useState(false);
 
     // ── Slide-in / slide-out animation ──
     useEffect(() => {
@@ -388,10 +388,48 @@ const RegularizationEditModal = ({
     // ── Handle Submit Button ──
     const handleSubmit = async () => {
         if (submitting) return; // Prevent rapid double-clicks
-        await submitRegularization(date, userId);
+
+        const result = await submitRegularization(date, userId);
+
+        // ── WFH Redirect: Home mode + 400 + specific backend message ──
+        // Check if ANY row has mode 'Home' (multi-row support)
+        const hasHomeMode = rows.some(r => r.mode === 'Home');
+        if (
+            !result.success &&
+            hasHomeMode &&
+            result.status === 400 &&
+            result.message?.includes(WFH_REDIRECT_ERROR)
+        ) {
+            // Suppress the normal error notice popup and show WFH redirect popup.
+            useRegularizationStore.setState({ submitMessage: null, submitSuccess: false });
+            setWfhRedirectVisible(true);
+            return;
+        }
+
         // Refresh grid after submit regardless of success or failure
         useAttendanceGridStore.getState().fetchCalendarStatus(userId);
     };
+
+    // ── WFH Redirect Handlers ──
+    const handleConfirmWFH = useCallback(() => {
+        setWfhRedirectVisible(false);
+        setIsHiddenForNav(true); // Hide current native modal to prevent overlap
+        if (navigation) {
+            navigation.navigate('LeaveApply', {
+                leaveType: 'Work From Home',
+                balance: null,
+                prefilledDate: date, // "YYYY-MM-DD" — prefills fromDate & toDate
+                onReturnToRegularization: () => {
+                    setIsHiddenForNav(false); // Restore modal visibility on return
+                }
+            });
+        }
+    }, [navigation, date]);
+
+    const handleDismissWFH = useCallback(() => {
+        setWfhRedirectVisible(false);
+        // Stay in regularization modal — no other state changes needed
+    }, []);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
@@ -464,7 +502,7 @@ const RegularizationEditModal = ({
     return (
         <Modal
             transparent
-            visible={renderModal}
+            visible={renderModal && !isHiddenForNav}
             animationType="fade"
             onRequestClose={handleClose}
         >
@@ -485,8 +523,8 @@ const RegularizationEditModal = ({
                                 <TouchableOpacity style={styles.hdrCancelBtn} onPress={onClose}>
                                     <Text style={styles.hdrCancelText}>Cancel</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={[styles.hdrSubmitBtn, submitting && { opacity: 0.7 }]} 
+                                <TouchableOpacity
+                                    style={[styles.hdrSubmitBtn, submitting && { opacity: 0.7 }]}
                                     onPress={handleSubmit}
                                     disabled={submitting}
                                 >
@@ -541,13 +579,17 @@ const RegularizationEditModal = ({
                 isSuccess={!!(submitMessage && submitSuccess)}
                 onOk={handlePopupOk}
             />
+
+            {/* ── WFH Redirect Confirmation Popup ── */}
+            <WFHCheckInConfirmModal
+                visible={wfhRedirectVisible}
+                onClose={handleDismissWFH}
+                onConfirm={handleConfirmWFH}
+            />
         </Modal>
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  PREMIUM STYLES PRESERVED
-// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,

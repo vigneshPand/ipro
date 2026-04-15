@@ -158,12 +158,12 @@ const AttendanceDetailModal = ({
 
     // ─── Modal Header Icons (ONLY place icons appear) ───
     // 1. Leave Approval Pending: leaveStatus === "Pending" → show ⚠️
-    const showLeaveApprovalPending = raw.leaveStatus === 'Pending' || raw.permissionStatus === 'Pending';
+    const showLeaveApprovalPending = raw.leaveStatus === 'Pending' || raw.permissionStatus === 'Pending' || raw?.leaveStatus === "Transfer";
     // 2. Regularization Approval Pending: regularizationStatus === true
     const showRegularization = raw.regularizationStatus === true;
     // 3. WFH Approval Pending: wfhStatus === "Pending"
     const showWfhPending = raw.wfhStatus === 'Pending' && raw.status === 'Pending Approval';
-    const showWfhWithdraw = raw.wfhStatus === 'Pending' && raw.status === 'WFH';
+    const showWfhWithdraw = raw.wfhStatus === 'Pending' && raw.status === 'WFH' || (raw?.wfhStatus === 'Transfer');
 
     // Date header text: "Stamps of 09 Mar 2026"
     const dayStr = String(d.date).padStart(2, '0');
@@ -189,7 +189,10 @@ const AttendanceDetailModal = ({
     const showWithdrawAction = isLeaveCase && !isAlreadyWithdrawn;
 
     const handleWithdrawClick = (type = 'leave') => {
-        if (isWithin3Days) {
+        const isFuture = selectedDate > today;
+        const canWithdraw = isFuture || isWithin3Days;
+
+        if (canWithdraw) {
             setWithdrawType(type);
             setWithdrawModalVisible(true);
         } else {

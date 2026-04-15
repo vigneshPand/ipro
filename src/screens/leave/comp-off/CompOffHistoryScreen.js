@@ -1,7 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../../utils/theme';
 import { getMonthRange } from '../../../utils/dateUtils';
@@ -18,12 +17,13 @@ const CompOffHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState('Pending');
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const {
         pendingList, historyList, selectedDetails, pendingLoading, historyLoading, refreshing,
         fetchPendingCompOff, fetchHistoryCompOff, fetchCompOffDetails,
         fetchNextPendingPage, fetchNextHistoryPage,
-        refreshPending, refreshHistory
+        refreshPending, refreshHistory, resetPending, resetHistory
     } = useCompOffStore();
 
     const {
@@ -85,20 +85,32 @@ const CompOffHistoryScreen = ({ navigation }) => {
         }
     }, [activeTab, filters, buildPendingExtra, buildHistoryExtra, fetchNextPendingPage, fetchNextHistoryPage]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchData();
-        }, [fetchData])
-    );
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, updateFilters, resetPending, resetHistory]);
+
+    useEffect(() => {
+        fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchData, filters, focusTrigger]);
 
     const handleTabChange = (tab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
-        if (tab === 'History') {
+        if (tab === 'Pending') {
+            if (typeof resetPending === 'function') resetPending();
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+        } else {
+            if (typeof resetHistory === 'function') resetHistory();
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
-        } else {
-            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
         }
     };
 

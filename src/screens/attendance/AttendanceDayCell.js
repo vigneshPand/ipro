@@ -65,9 +65,13 @@ const AttendanceDayCell = ({
         permissionStatus === 'Pending' ||
         (permissionMinutes != null && permissionMinutes !== '');
 
+    const hasWFH = item?.wfhId && item?.wfhStatus;
+    const hasLeave = item?.leaveId && item?.leaveStatus;
+    // const hasRegularization = item?.hasPendingOrTransferRegularization;
+
     const isValidStatus =
         status === 'Present' ||
-        wfhStatus === 'Pending' ||
+        wfhStatus === 'Pending' || wfhStatus === "WFH" ||
         isPermissionPending ||
         (leaveType &&
             leaveType.toLowerCase() === 'leave' &&
@@ -77,12 +81,13 @@ const AttendanceDayCell = ({
                 leaveType.toLowerCase() === 'secondhalf')) ||
         regularizationStatus;
 
+    const overrides = hasWFH || hasLeave || isPermissionPending;
+
     const canPress =
         !isTrailing &&
         (
-            (!isFuture) || isPermissionPending
-        ) &&
-        isValidStatus;
+            overrides || (!isFuture && isValidStatus)
+        );
     // Edit icon: show ONLY if regularizationStatus is falsy AND date is within last 7 days from today
     let showEditIcon = false;
     if (!isEmpty) {

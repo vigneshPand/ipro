@@ -298,13 +298,19 @@ const useRegularizationStore = create((set, get) => ({
             set({ submitting: false, submitMessage: msg, submitSuccess: true });
             return { success: true };
         } catch (err) {
-            // console.error('submitRegularization error:', err);
             console.log('submitRegularization error:', err);
-            const errMsg = typeof err?.response?.data === 'string' && err.response.data.trim()
-                ? err.response.data.trim()
-                : 'Failed to submit. Please try again.';
+            const errStatus = err?.response?.status ?? null;
+            let errMsg = 'Failed to submit. Please try again.';
+            if (typeof err?.response?.data === 'string' && err.response.data.trim()) {
+                errMsg = err.response.data.trim();
+            } else if (err?.response?.data?.message) {
+                errMsg = String(err.response.data.message).trim();
+            }
+
+            // Surface raw status + message so the UI can decide whether
+            // to intercept specific business errors (e.g. WFH redirect).
             set({ submitting: false, submitMessage: errMsg, submitSuccess: false });
-            return { success: false };
+            return { success: false, status: errStatus, message: errMsg };
         }
     },
 

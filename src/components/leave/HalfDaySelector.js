@@ -1,45 +1,60 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Dropdown } from 'react-native-element-dropdown';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 
 const DEFAULT_SESSIONS = ['Full Day', 'First Half', 'Second Half'];
 
-const HalfDaySelector = ({ date, selectedSession, sessionTypes, onSelect, formatDate }) => {
-    const [showDropdown, setShowDropdown] = useState(false);
-    const options = (sessionTypes && sessionTypes.length > 0) ? sessionTypes : DEFAULT_SESSIONS;
+const HalfDaySelector = ({ date, selectedSession, sessionTypes, onSelect, formatDate, leaveType }) => {
+    const [isFocus, setIsFocus] = useState(false);
+    const optionsList = (sessionTypes && sessionTypes.length > 0) ? sessionTypes : DEFAULT_SESSIONS;
+    
+    // Convert options to Dropdown format
+    const dropdownData = optionsList.map(option => ({
+        label: option,
+        value: option,
+    }));
 
     return (
         <View style={styles.dateBlock}>
-            <View style={styles.halfDayRow}>
-                <View style={styles.indicatorStrip} />
-                <Text style={styles.dateValueText}>{formatDate(date)}</Text>
-                <View style={styles.dropdownContainer}>
-                    <TouchableOpacity
-                        style={styles.dropdownBox}
-                        onPress={() => setShowDropdown(!showDropdown)}
-                    >
-                        <Text style={styles.dropdownBoxText}>{selectedSession}</Text>
-                        <Icon name="menu-down" size={16} color={COLORS.darkText} />
-                    </TouchableOpacity>
-                    {showDropdown && (
-                        <View style={styles.dropdownList}>
-                            {options.map((option) => (
-                                <TouchableOpacity
-                                    key={option}
-                                    style={styles.dropdownOption}
-                                    onPress={() => {
-                                        onSelect(option);
-                                        setShowDropdown(false);
-                                    }}
-                                >
-                                    <Text style={styles.dropdownOptionText}>{option}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
+            {leaveType === 'Work From Home' ? 
+             null : (
+                <View style={styles.halfDayRow}>
+                    <View style={styles.indicatorStrip} />
+                    <Text style={styles.dateValueText}>{formatDate(date)}</Text>
+                    <View style={styles.dropdownWrapper}>
+                        <Dropdown
+                            style={[styles.dropdown, isFocus && styles.dropdownFocus]}
+                            placeholderStyle={styles.placeholderStyle}
+                            selectedTextStyle={styles.selectedTextStyle}
+                            itemTextStyle={styles.itemTextStyle}
+                            iconStyle={styles.iconStyle}
+                            data={dropdownData}
+                            
+                            maxHeight={200}
+                            labelField="label"
+                            valueField="value"
+                            placeholder={!isFocus ? selectedSession : '...'}
+                            value={selectedSession}
+                            onFocus={() => setIsFocus(true)}
+                            onBlur={() => setIsFocus(false)}
+                            onChange={item => {
+                                onSelect(item.value);
+                                setIsFocus(false);
+                            }}
+                            renderLeftIcon={() => (
+                                <Icon
+                                    style={styles.icon}
+                                    color={isFocus ? COLORS.blue : COLORS.darkText}
+                                    name="menu-down"
+                                    size={16}
+                                />
+                            )}
+                        />
+                    </View>
                 </View>
-            </View>
+            )}
         </View>
     );
 };
@@ -72,49 +87,38 @@ const styles = StyleSheet.create({
         marginRight: 8,
         minWidth: 85,
     },
-    dropdownContainer: {
+    dropdownWrapper: {
         flex: 1,
-        position: 'relative',
-        zIndex: 9999,
-        elevation: 10,
-        overflow: 'visible',
     },
-    dropdownBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        paddingHorizontal: 8,
+    dropdown: {
         height: 32,
-        borderRadius: 4,
-        backgroundColor: '#fff',
-        minWidth: 100,
-    },
-    dropdownBoxText: {
-        fontSize: 11,
-        color: COLORS.darkText,
-    },
-    dropdownList: {
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        right: 0,
-        backgroundColor: '#fff',
-        borderWidth: 1,
         borderColor: '#e5e7eb',
+        borderWidth: 1,
         borderRadius: 4,
-        zIndex: 5000,
-        elevation: 15,
+        paddingHorizontal: 8,
+        backgroundColor: '#fff',
     },
-    dropdownOption: {
-        padding: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
+    dropdownFocus: {
+        borderColor: COLORS.blue,
     },
-    dropdownOptionText: {
+    icon: {
+        marginRight: 8,
+    },
+    placeholderStyle: {
+        fontSize: 11,
+        color: '#9ca3af',
+    },
+    selectedTextStyle: {
         fontSize: 11,
         color: COLORS.darkText,
+    },
+    itemTextStyle: {
+        fontSize: 10,
+        color: COLORS.darkText,
+    },
+    iconStyle: {
+        width: 16,
+        height: 16,
     },
 });
 

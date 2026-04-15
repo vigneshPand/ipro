@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -23,12 +23,12 @@ import RegularizationListCard, {
 } from '../../components/regularization/RegularizationListCard';
 import RegularizationDetailsModal from '../../components/regularization/RegularizationDetailsModal';
 
-// ─── Screen ────────────────────────────────────────────────────────────────────
 
 const RegularizationHistoryScreen = ({ navigation }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
+    const [focusTrigger, setFocusTrigger] = useState(0);
 
     const {
         // lists
@@ -46,6 +46,8 @@ const RegularizationHistoryScreen = ({ navigation }) => {
         // helpers
         setSelectedItem,
         resetForTabSwitch,
+        resetPending,
+        resetHistory,
     } = useRegularizationHistoryStore();
 
     const {
@@ -88,12 +90,22 @@ const RegularizationHistoryScreen = ({ navigation }) => {
         }
     }, [activeTab, buildQueryParams, fetchPendingList, fetchHistoryList]);
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchData();
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [fetchData, filters])
-    );
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            setActiveTab('Pending');
+            if (typeof resetForTabSwitch === 'function') resetForTabSwitch();
+            if (typeof resetPending === 'function') resetPending();
+            if (typeof resetHistory === 'function') resetHistory();
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+            setFocusTrigger(prev => prev + 1);
+        });
+        return unsubscribe;
+    }, [navigation, updateFilters, resetForTabSwitch, resetPending, resetHistory]);
+
+    // Fetch when tab, filters, or focus changes
+    useEffect(() => {
+        fetchData();
+    }, [fetchData, filters, focusTrigger]);
 
     // ── Pull-to-refresh ───────────────────────────────────────────────────────
     const onRefresh = useCallback(async () => {
@@ -107,11 +119,13 @@ const RegularizationHistoryScreen = ({ navigation }) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
         resetForTabSwitch();
-        if (tab === 'History') {
+        if (tab === 'Pending') {
+            if (typeof resetPending === 'function') resetPending();
+            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
+        } else {
+            if (typeof resetHistory === 'function') resetHistory();
             const { fromDate, toDate } = getMonthRange();
             updateFilters({ fromDate, toDate, status: [], pageNo: 0 });
-        } else {
-            updateFilters({ fromDate: null, toDate: null, status: [], pageNo: 0 });
         }
     };
 
