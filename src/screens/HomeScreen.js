@@ -19,7 +19,7 @@ import moment from 'moment';
 import Geolocation from 'react-native-geolocation-service';
 import AttendanceService from '../services/AttendanceService';
 import AuthService from '../services/AuthService';
-import { WORK_LOCATIONS, OFFICE_LOCATION } from '../constants/Config';
+import { WORK_LOCATIONS, OFFICE_LOCATION, DEFAULT_SHIFT } from '../constants/Config';
 import { COLORS, SHADOW } from '../utils/theme';
 import { calculateDistance } from '../utils/LocationHelper';
 import LoadingOverlay from '../components/LoadingOverlay';
@@ -27,6 +27,7 @@ import WFHCheckInConfirmModal from '../components/common/WFHCheckInConfirmModal'
 import useRoleStore from '../store/useRoleStore';
 import SummaryCard from '../components/dashboard/SummaryCard';
 import TeamActivityItem from '../components/dashboard/TeamActivityItem';
+import { calculateWorkedSeconds, formatWorkedDuration, isCheckedIn } from '../utils/workedHoursUtils';
 
 const HomeScreen = ({ route, navigation }) => {
     const { hasManagerRole, activeTab, setActiveTab, fetchRoles } = useRoleStore();
@@ -78,14 +79,27 @@ const HomeScreen = ({ route, navigation }) => {
     else greeting = "Good Evening";
 
     useEffect(() => {
+        requestLocationPermission();
+    }, []);
+
+    // Worked Hrs timer only needs to tick while a Check In is currently open;
+    // once checked out the accumulated duration is frozen until the next Check In.
+    const hasOpenSession = isCheckedIn(todayActivity);
+    useEffect(() => {
+        if (!hasOpenSession) return undefined;
+
         const timer = setInterval(() => {
             setCurrentTime(moment());
         }, 1000);
 
-        requestLocationPermission();
-
         return () => clearInterval(timer);
-    }, []);
+    }, [hasOpenSession]);
+
+    // Attendance API response (todayActivity) is the single source of truth for the Worked Hrs timer.
+    const workedHrsDisplay = React.useMemo(
+        () => formatWorkedDuration(calculateWorkedSeconds(todayActivity, currentTime)),
+        [todayActivity, currentTime]
+    );
 
     // ─── Close drawer on role switch ───
     useEffect(() => {
@@ -235,7 +249,7 @@ const HomeScreen = ({ route, navigation }) => {
                     // Reuse the same single payload pattern as handleConfirmSelection
                     const payload = {
                         userId: userInfo.userId,
-                        location: 'Chennai',
+                        location: OFFICE_LOCATION.CITY,
                         workMode: 'Home',
                         currStatus: isCheckIn, // true = check-in, false = check-out
                         remarks: '',
@@ -350,7 +364,7 @@ const HomeScreen = ({ route, navigation }) => {
 
                     const payload = {
                         userId: userInfo?.userId,
-                        location: 'Chennai',
+                        location: OFFICE_LOCATION.CITY,
                         workMode: selectedWorkMode,
                         currStatus: showCheckInButton, // true if checking in, false if checking out
                         remarks: remarks || '',
@@ -448,9 +462,9 @@ const HomeScreen = ({ route, navigation }) => {
                         <View style={styles.card}>
                             <View style={styles.cardTop}>
                                 <View>
-                                    <Text style={styles.timeText}>{currentTime.format('hh : mm : ss A')}</Text>
+                                    <Text style={styles.timeText}>{workedHrsDisplay}</Text>
                                     <Text style={styles.dateText}>{currentTime.format('ddd, MMM DD, YYYY')}</Text>
-                                    <Text style={styles.shiftText}>Shift: General (10:00 AM - 7:00 PM)</Text>
+                                    <Text style={styles.shiftText}>Shift: {DEFAULT_SHIFT.name} ({DEFAULT_SHIFT.timing})</Text>
                                 </View>
                                 <Icons name="calendar-clock" size={35} color={COLORS.primary} />
                             </View>

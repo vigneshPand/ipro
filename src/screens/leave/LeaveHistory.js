@@ -226,7 +226,7 @@ const LeaveHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={historyLeaves}
-                        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                        keyExtractor={(item, index) => item.id?.toString() ?? `history-${index}`}
                         renderItem={({ item }) => (
                             <HistoryLeaveCard
                                 item={item}

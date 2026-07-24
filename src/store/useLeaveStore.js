@@ -15,7 +15,7 @@ const LEAVE_TYPE_COLOR_MAP = {
 };
 
 const mapLeaveBalanceToUI = (item) => ({
-    id: item.id?.toString() || String(Math.random()),
+    id: item.id?.toString() || `${item.type ?? 'leave'}-${item.total ?? 0}-${item.remaining ?? 0}`,
     title: item.type,
     titleColor: LEAVE_TYPE_COLOR_MAP[item.type] || '#3E699B',
     total: item.total?.toString() ?? '0',

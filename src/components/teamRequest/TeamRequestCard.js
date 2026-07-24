@@ -3,7 +3,6 @@ import CommonHistoryCard from '../common/HistoryCard';
 
 import { formatDate } from '../../utils/dateUtils';
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 const TeamRequestCard = ({ item = {}, onPress, type = 'regularization', isHistory = false }) => {
     const isReg = type === 'regularization';
@@ -16,7 +15,7 @@ const TeamRequestCard = ({ item = {}, onPress, type = 'regularization', isHistor
     const dateLabel = isReg ? 'Date:' : 'Date:';
 
     // Additional info
-    const pendingWith = item?.reviewByName || item?.pendingWith || item?.approvedByName || '-';
+    // const pendingWith = item?.reviewByName || item?.pendingWith || item?.approvedByName || '-';
 
     const details = [
         { label: 'Employee Name:', value: name },

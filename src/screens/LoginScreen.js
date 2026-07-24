@@ -64,7 +64,6 @@ const LoginScreen = ({ navigation }) => {
             });
 
         } catch (error) {
-            console.error('Authentication Flow Error:', error);
             showError('Login failed. Please try again.');
             await AuthService.signOut();
         } finally {
@@ -104,12 +103,14 @@ const LoginScreen = ({ navigation }) => {
                             {isAzureLoading ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
-                                <View style={styles.buttonContent}>
-                                    <Image
-                                        source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg' }}
-                                        style={styles.msIcon}
-                                        resizeMode="contain"
-                                    />
+                        <View style={styles.buttonContent}>
+                                    {/* Microsoft 4-color Windows logo — no network dependency */}
+                                    <View style={styles.msLogoGrid}>
+                                        <View style={[styles.msSquare, { backgroundColor: '#F25022', marginRight: 2, marginBottom: 2 }]} />
+                                        <View style={[styles.msSquare, { backgroundColor: '#7FBA00', marginBottom: 2 }]} />
+                                        <View style={[styles.msSquare, { backgroundColor: '#00A4EF', marginRight: 2 }]} />
+                                        <View style={[styles.msSquare, { backgroundColor: '#FFB900' }]} />
+                                    </View>
                                     <Text style={styles.buttonText}>Sign in with Microsoft</Text>
                                 </View>
                             )}
@@ -199,10 +200,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    msIcon: {
+    msLogoGrid: {
         width: 20,
         height: 20,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         marginRight: 12,
+    },
+    msSquare: {
+        width: 9,
+        height: 9,
     },
     buttonText: {
         fontSize: 16,

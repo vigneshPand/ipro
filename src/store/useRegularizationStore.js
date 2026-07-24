@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AttendanceService from '../services/AttendanceService';
+import { OFFICE_LOCATION } from '../constants/Config';
 
 /**
  * Creates a fresh empty row object.
@@ -198,7 +199,7 @@ const useRegularizationStore = create((set, get) => ({
                 date,
                 time: inServer,
                 currStatus: true,
-                location: 'chennai',
+                location: OFFICE_LOCATION.CITY,
                 workMode,
                 userId,
                 remarks: '',
@@ -207,7 +208,7 @@ const useRegularizationStore = create((set, get) => ({
                 date,
                 time: outServer,
                 currStatus: false,
-                location: 'chennai',
+                location: OFFICE_LOCATION.CITY,
                 workMode,
                 userId,
                 remarks: '',
@@ -267,7 +268,7 @@ const useRegularizationStore = create((set, get) => ({
                 date,
                 time: inServer,
                 currStatus: true,
-                location: 'chennai',
+                location: OFFICE_LOCATION.CITY,
                 workMode,
                 userId,
                 remarks: row.remarks || '',
@@ -276,7 +277,7 @@ const useRegularizationStore = create((set, get) => ({
                 date,
                 time: outServer,
                 currStatus: false,
-                location: 'chennai',
+                location: OFFICE_LOCATION.CITY,
                 workMode,
                 userId,
                 remarks: '',
@@ -298,7 +299,7 @@ const useRegularizationStore = create((set, get) => ({
             set({ submitting: false, submitMessage: msg, submitSuccess: true });
             return { success: true };
         } catch (err) {
-            console.log('submitRegularization error:', err);
+            console.error('submitRegularization error:', err);
             const errStatus = err?.response?.status ?? null;
             let errMsg = 'Failed to submit. Please try again.';
             if (typeof err?.response?.data === 'string' && err.response.data.trim()) {

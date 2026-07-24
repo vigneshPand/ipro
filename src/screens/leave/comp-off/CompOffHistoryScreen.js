@@ -190,7 +190,7 @@ const CompOffHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={pendingList}
-                        keyExtractor={(item) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || Math.random()).toString()}
+                        keyExtractor={(item, index) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || `pending-${index}`).toString()}
                         renderItem={({ item }) => (
                             <PendingCompOffCard
                                 item={item}
@@ -226,7 +226,7 @@ const CompOffHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={historyList}
-                        keyExtractor={(item) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || Math.random()).toString()}
+                        keyExtractor={(item, index) => (item.id || item.requestId || item.compOffGrantId || item.compOffId || `history-${index}`).toString()}
                         renderItem={({ item }) => (
                             <HistoryCompOffCard
                                 item={item}

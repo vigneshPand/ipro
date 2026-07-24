@@ -272,8 +272,8 @@ const RegularizationHistoryScreen = ({ navigation }) => {
                 ) : (
                     <FlatList
                         data={listData}
-                        keyExtractor={(item) =>
-                            item.requestId?.toString() || Math.random().toString()
+                        keyExtractor={(item, index) =>
+                            item.requestId?.toString() ?? `reg-${index}`
                         }
                         renderItem={renderItem}
                         contentContainerStyle={styles.listContent}

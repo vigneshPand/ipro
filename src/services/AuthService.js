@@ -20,7 +20,7 @@ class AuthService {
             }
             throw new Error('No access token received from Azure');
         } catch (error) {
-            console.error('Azure Login Error:', error);
+            // console.error('Azure Login Error:', error);
             throw error;
         }
     }
@@ -40,7 +40,7 @@ class AuthService {
                         service: 'ipro_backend_service'
                     });
                 } else {
-                    console.error('Keychain not available');
+                    // console.error('Keychain not available');
                     throw new Error('Secure storage not available');
                 }
 
@@ -70,7 +70,7 @@ class AuthService {
             }
             throw new Error('Failed to fetch user profile');
         } catch (error) {
-            console.error('Fetch Authenticated User Error:', error);
+            // console.error('Fetch Authenticated User Error:', error);
             throw error;
         }
     }
@@ -89,20 +89,20 @@ class AuthService {
             await AsyncStorage.removeItem('azure_auth_state');
 
         } catch (error) {
-            console.error('Logout Error:', error);
+            // console.error('Logout Error:', error);
         }
     }
 
     async getBackendToken() {
         try {
             if (!Keychain || typeof Keychain.getGenericPassword !== 'function') {
-                console.error('Keychain native module is not available.');
+                // console.error('Keychain native module is not available.');
                 return null;
             }
             const credentials = await Keychain.getGenericPassword({ service: 'ipro_backend_service' });
             return credentials ? credentials.password : null;
         } catch (error) {
-            console.error('Error retrieving token from Keychain:', error);
+            // console.error('Error retrieving token from Keychain:', error);
             return null;
         }
     }
@@ -112,7 +112,7 @@ class AuthService {
             const profile = await AsyncStorage.getItem('user_profile');
             return profile ? JSON.parse(profile) : null;
         } catch (error) {
-            console.error('Error parsing user profile:', error);
+            // console.error('Error parsing user profile:', error);
             return null;
         }
     }

@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../utils/theme';
 import useHolidayStore from '../../store/useHolidayStore';
 import AuthService from '../../services/AuthService';
+import { DEFAULT_SHIFT } from '../../constants/Config';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 40) / 2;
@@ -83,7 +84,7 @@ const HolidayScreen = ({ navigation }) => {
 
     const renderSubHeader = () => (
         <View style={styles.subHeaderContainer}>
-            <Text style={styles.subTitle}>Holiday schedule for {new Date().getFullYear()} <Text style={styles.subTitleSpan}>(Shift: General)</Text></Text>
+            <Text style={styles.subTitle}>Holiday schedule for {new Date().getFullYear()} <Text style={styles.subTitleSpan}>(Shift: {DEFAULT_SHIFT.name})</Text></Text>
         </View>
     );
 

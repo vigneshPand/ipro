@@ -80,6 +80,8 @@ class LeaveService {
             const response = await apiClient.get(`/userMasterController/getMyManager?emailId=${emailId}`);
             return response.data;
         } catch (error) {
+            console.log('Err', error);
+            
             console.error('getManagerInfo Error:', error);
             return null;
         }

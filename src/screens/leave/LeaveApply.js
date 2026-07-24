@@ -108,7 +108,7 @@ const LeaveApplyScreen = ({ navigation, route }) => {
         const loadManagerInfo = async () => {
             try {
                 const userInfo = await AuthService.getUserInfo();
-                const userId = userInfo?.userId;
+                const userId = userInfo?.mail;
                 const manager = await LeaveService.getManagerInfo(userId);
                 setManagerInfo(manager);
             } catch (error) {

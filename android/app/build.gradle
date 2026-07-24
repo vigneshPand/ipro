@@ -9,6 +9,13 @@ react {
     autolinkLibrariesWithApp()
 }
 
+// ─── Load keystore credentials from gitignored keystore.properties ─────────────
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 /**
  * Enable Proguard (keep false for now)
  */
@@ -30,8 +37,8 @@ android {
         applicationId "com.ipromobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 4
+        versionName "1.0.0"
 
         // Azure AppAuth redirect scheme
         manifestPlaceholders = [
@@ -51,11 +58,15 @@ android {
         }
 
         release {
-            // keystore is inside android/app
-            storeFile file(IPRO_STORE_FILE)
-            storePassword IPRO_STORE_PASSWORD
-            keyAlias IPRO_KEY_ALIAS
-            keyPassword IPRO_KEY_PASSWORD
+            // Load from keystore.properties first; fall back to project/env properties for CI
+            def storeFileVal = keystoreProperties['IPRO_STORE_FILE'] ?: (project.hasProperty('IPRO_STORE_FILE') ? IPRO_STORE_FILE : 'ipro-release.keystore')
+            def storePwVal   = keystoreProperties['IPRO_STORE_PASSWORD'] ?: (project.hasProperty('IPRO_STORE_PASSWORD') ? IPRO_STORE_PASSWORD : '')
+            def keyAliasVal  = keystoreProperties['IPRO_KEY_ALIAS']     ?: (project.hasProperty('IPRO_KEY_ALIAS')     ? IPRO_KEY_ALIAS     : '')
+            def keyPwVal     = keystoreProperties['IPRO_KEY_PASSWORD']  ?: (project.hasProperty('IPRO_KEY_PASSWORD')  ? IPRO_KEY_PASSWORD  : '')
+            storeFile     file(storeFileVal)
+            storePassword storePwVal
+            keyAlias      keyAliasVal
+            keyPassword   keyPwVal
         }
     }
 
